@@ -1,0 +1,48 @@
+name: Update dependencies
+on:
+  schedule:
+    - cron: '43 3 * * 1'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: update-dependencies
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - name: Update locked inputs and module hashes
+        run: |
+          nix flake update
+          nix develop -c go2nix generate
+      - name: Validate updated dependencies
+        run: |
+          nix run .#nix-go2nix -- flake check
+          nix develop -c bash -euo pipefail -c 'just check && just integration && just build'
+      - name: Commit and push updated dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add flake.lock go2nix.toml
+          if git diff --cached --quiet; then
+            echo 'Dependencies already up to date.'
+            exit 0
+          fi
+          git commit -F - <<'EOF'
+          chore(deps): update Nix inputs and Go module hashes
+
+          Update flake inputs and regenerate go2nix.toml from go.mod and go.sum.
+
+          Validated with flake checks, just check, just integration, and just build.
+          EOF
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"

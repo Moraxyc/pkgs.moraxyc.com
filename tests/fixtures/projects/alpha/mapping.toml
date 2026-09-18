@@ -1,0 +1,5 @@
+[[rules]]
+package = "alpha"
+architecture = "*"
+asset = "alpha_*.deb"
+pool = "pool/{project}/{release_tag}/{filename}"

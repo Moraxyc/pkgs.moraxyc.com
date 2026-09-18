@@ -1,0 +1,9 @@
+.build/
+
+coverage.out
+*.test
+
+# nix
+result
+result-*
+.direnv/

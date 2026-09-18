@@ -1,0 +1,5 @@
+[project]
+repository = "moraxyc/beta"
+enabled = true
+manifest_asset = "moraxyc-manifest.json"
+include_prereleases = false

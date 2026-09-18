@@ -1,0 +1,121 @@
+name: Publish
+on:
+  workflow_call:
+    inputs:
+      source_commit:
+        required: true
+        type: string
+      site:
+        required: true
+        type: string
+      artifact:
+        required: true
+        type: string
+permissions: {}
+concurrency:
+  group: moraxyc-pages-publish
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: pages-production
+    permissions:
+      contents: read
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      SITE_STORE_PATH: ${{ inputs.site }}
+      BUILD_ARTIFACT: ${{ inputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact }}
+          path: .build
+      - name: Restore prebuilt site and tools
+        run: |
+          nix-store --import < .build/publication.nar
+          export PATH="$SITE_STORE_PATH/tools/bin:$PATH"
+          echo "$SITE_STORE_PATH/tools/bin" >> "$GITHUB_PATH"
+          test "$(cat .build/source-commit)" = "$SOURCE_COMMIT"
+          cp "$SITE_STORE_PATH/snapshot.json" .build/snapshot.json
+          cp "$SITE_STORE_PATH/publication.json" .build/publication.json
+          cmp publication/snapshot.json .build/snapshot.json
+          cmp publication/context.json .build/publication.json
+          cp -R "$SITE_STORE_PATH/public" .build/public
+          chmod -R u+w .build/public
+      - name: Reject superseded source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEFAULT_BRANCH" --jq .sha)" = "$SOURCE_COMMIT"
+      - name: Verify and sign
+        env:
+          APT_SIGNING_SUBKEY: ${{ secrets.APT_SIGNING_SUBKEY }}
+          APT_SIGNING_PASSPHRASE: ${{ secrets.APT_SIGNING_PASSPHRASE }}
+        run: moraxyc-repo central sign
+      - name: Verify signed tree with APT
+        run: moraxyc-repo central apt-smoke
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-repository-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .build/snapshot.json
+            .build/publication.json
+            .build/public/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Save publication audit
+        run: |
+          {
+            echo "commit=$SOURCE_COMMIT"
+            echo "build_run=$GITHUB_RUN_ID"
+            echo "artifact=$BUILD_ARTIFACT"
+            echo "trigger=$GITHUB_EVENT_NAME"
+            jq -r '"epoch=\(.epoch)\nprimary_fingerprint=\(.primary_fingerprint)\nsigning_fingerprint=\(.signing_fingerprint)"' .build/publication.json
+            echo "site=$SITE_STORE_PATH"
+            echo "tools=$(readlink -f "$SITE_STORE_PATH/tools")"
+            sha256sum flake.lock go2nix.toml .build/snapshot.json .build/publication.json .build/public/deb/dists/stable/Release
+          } > .build/audit.txt
+          cat .build/audit.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Recheck source before deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEFAULT_BRANCH" --jq .sha)" = "$SOURCE_COMMIT"
+      - name: Deploy verified tree
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
+          PAGES_BRANCH: ${{ github.event.repository.default_branch }}
+          WRANGLER_SEND_METRICS: 'false'
+          WRANGLER_OUTPUT_FILE_PATH: .build/pages-deployment.jsonl
+        run: |
+          moraxyc-repo central deploy
+      - name: Record deployment identity
+        run: |
+          jq -s -e '[.[] | select(.type == "pages-deploy-detailed" and .version == 1)] | last | {deployment_id, pages_project, environment, production_branch, url}' .build/pages-deployment.jsonl > .build/deployment.json
+          jq -e '.environment == "production" and (.deployment_id | type == "string")' .build/deployment.json
+          cat .build/deployment.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke custom domain
+        run: |
+          moraxyc-repo central smoke
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: publication-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .build/audit.txt
+            .build/deployment.json
+            .build/pages-deployment.jsonl
+          if-no-files-found: error
+          retention-days: 90

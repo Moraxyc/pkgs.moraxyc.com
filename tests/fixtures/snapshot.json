@@ -1,0 +1,159 @@
+{
+  "schema": 1,
+  "projects": [
+    {
+      "id": "alpha",
+      "repository": "moraxyc/alpha",
+      "releases": [
+        {
+          "id": 103,
+          "tag": "v1.0-1",
+          "prerelease": false,
+          "published_at": "2026-09-15T02:00:00Z",
+          "assets": [
+            {
+              "id": 101,
+              "name": "alpha_1.0-1_amd64.deb",
+              "size": 1234,
+              "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            {
+              "id": 102,
+              "name": "alpha_1.0-1_arm64.deb",
+              "size": 1234,
+              "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+            },
+            {
+              "id": 103,
+              "name": "moraxyc-manifest.json",
+              "size": 680
+            }
+          ],
+          "manifest": {
+            "schema": 1,
+            "project": "alpha",
+            "release_tag": "v1.0-1",
+            "packages": [
+              {
+                "Package": "alpha",
+                "Version": "1.0-1",
+                "Architecture": "amd64",
+                "Filename": "alpha_1.0-1_amd64.deb",
+                "Size": 1234,
+                "SHA256": "1111111111111111111111111111111111111111111111111111111111111111",
+                "Description": "alpha package\n A continuation line\n .\n Another paragraph",
+                "Depends": "libc6 (>= 2.35)"
+              },
+              {
+                "Package": "alpha",
+                "Version": "1.0-1",
+                "Architecture": "arm64",
+                "Filename": "alpha_1.0-1_arm64.deb",
+                "Size": 1234,
+                "SHA256": "2222222222222222222222222222222222222222222222222222222222222222",
+                "Description": "alpha package\n A continuation line\n .\n Another paragraph",
+                "Depends": "libc6 (>= 2.35)"
+              }
+            ]
+          }
+        },
+        {
+          "id": 106,
+          "tag": "v1.1-1",
+          "prerelease": false,
+          "published_at": "2026-09-15T02:00:00Z",
+          "assets": [
+            {
+              "id": 104,
+              "name": "alpha_1.1-1_amd64.deb",
+              "size": 1234,
+              "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+            },
+            {
+              "id": 105,
+              "name": "alpha_1.1-1_arm64.deb",
+              "size": 1234,
+              "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+            },
+            {
+              "id": 106,
+              "name": "moraxyc-manifest.json",
+              "size": 680
+            }
+          ],
+          "manifest": {
+            "schema": 1,
+            "project": "alpha",
+            "release_tag": "v1.1-1",
+            "packages": [
+              {
+                "Package": "alpha",
+                "Version": "1.1-1",
+                "Architecture": "amd64",
+                "Filename": "alpha_1.1-1_amd64.deb",
+                "Size": 1234,
+                "SHA256": "4444444444444444444444444444444444444444444444444444444444444444",
+                "Description": "alpha package\n A continuation line\n .\n Another paragraph",
+                "Depends": "libc6 (>= 2.35)"
+              },
+              {
+                "Package": "alpha",
+                "Version": "1.1-1",
+                "Architecture": "arm64",
+                "Filename": "alpha_1.1-1_arm64.deb",
+                "Size": 1234,
+                "SHA256": "5555555555555555555555555555555555555555555555555555555555555555",
+                "Description": "alpha package\n A continuation line\n .\n Another paragraph",
+                "Depends": "libc6 (>= 2.35)"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "beta",
+      "repository": "moraxyc/beta",
+      "releases": [
+        {
+          "id": 108,
+          "tag": "v2.0-1",
+          "prerelease": false,
+          "published_at": "2026-09-15T02:00:00Z",
+          "assets": [
+            {
+              "id": 107,
+              "name": "beta_2.0-1_all.deb",
+              "size": 1234,
+              "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+            },
+            {
+              "id": 108,
+              "name": "moraxyc-manifest.json",
+              "size": 338
+            }
+          ],
+          "manifest": {
+            "schema": 1,
+            "project": "beta",
+            "release_tag": "v2.0-1",
+            "packages": [
+              {
+                "Package": "beta",
+                "Version": "2.0-1",
+                "Architecture": "all",
+                "Filename": "beta_2.0-1_all.deb",
+                "Size": 1234,
+                "SHA256": "7777777777777777777777777777777777777777777777777777777777777777",
+                "Description": "beta package\n A continuation line\n .\n Another paragraph"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "collection": {
+    "completed_at": "2026-09-15T02:01:00Z"
+  }
+}

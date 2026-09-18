@@ -1,0 +1,5 @@
+[[rules]]
+package = "disabled"
+architecture = "*"
+asset = "disabled_*.deb"
+pool = "pool/{project}/{release_tag}/{filename}"

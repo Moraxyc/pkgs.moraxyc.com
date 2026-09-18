@@ -1,0 +1,56 @@
+name: Update publication
+on:
+    repository_dispatch:
+        types: [project-release-published]
+    schedule:
+        - cron: "17 */6 * * *"
+    workflow_dispatch:
+permissions: {}
+concurrency:
+    group: moraxyc-publication-update
+    cancel-in-progress: false
+jobs:
+    update:
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 30
+        permissions:
+            contents: write
+        outputs:
+            commit: ${{ steps.save.outputs.commit }}
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  ref: ${{ github.event.repository.default_branch }}
+                  persist-credentials: false
+            - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+            - name: Enter locked publication environment
+              run: nix run .#nix-go2nix -- develop .#publication -c bash -euo pipefail -c "echo \"\$PUBLICATION_TOOLS/bin\" >> \"\$GITHUB_PATH\""
+
+            - name: Refresh and validate publication inputs
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: moraxyc-repo update-publication
+            - name: Save publication inputs
+              id: save
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+              run: |
+                  git config user.name 'github-actions[bot]'
+                  git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+                  git add publication/snapshot.json publication/context.json
+                  if ! git diff --cached --quiet; then
+                    git commit -m 'chore(publication): refresh snapshot and epoch'
+                  fi
+                  gh auth setup-git
+                  git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
+                  echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+    build:
+        needs: update
+        permissions:
+            contents: read
+        uses: ./.github/workflows/build.yml
+        with:
+            source_commit: ${{ needs.update.outputs.commit }}
+            publish: true

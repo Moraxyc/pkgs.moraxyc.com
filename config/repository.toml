@@ -1,0 +1,10 @@
+[repository]
+base_url = "https://pkgs.moraxyc.com/deb"
+suite = "stable"
+codename = "stable"
+components = ["main"]
+architectures = ["amd64", "arm64"]
+valid_until_days = 7
+
+[github]
+organization = "moraxyc"

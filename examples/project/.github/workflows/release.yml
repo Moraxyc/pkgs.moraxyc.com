@@ -1,0 +1,194 @@
+name: Project Release
+on:
+  push:
+    tags: ['v*']
+permissions: {}
+concurrency:
+  group: project-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT_ID: ${{ vars.APT_PROJECT_ID }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      PROJECT_REPOSITORY: ${{ github.repository }}
+      TESTED_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a reviewed tools commit
+        env:
+          TOOLS_REF: ${{ vars.REPOSITORY_TOOLS_REF }}
+        run: '[[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: moraxyc/pkgs.moraxyc.com
+          ref: ${{ vars.REPOSITORY_TOOLS_REF }}
+          path: .repository-tools
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build repository tools
+        run: cd .repository-tools && nix develop -c just build
+      - name: Build and test final packages
+        run: nix-shell --pure shell.nix --run 'just release'
+      - name: Generate and verify final manifest
+        run: |
+          nix develop ./.repository-tools -c .repository-tools/.build/moraxyc-repo project-ci manifest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tested-release
+          path: dist/
+          if-no-files-found: error
+          include-hidden-files: true
+  artifact-round-trip:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT_ID: ${{ vars.APT_PROJECT_ID }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      PROJECT_REPOSITORY: ${{ github.repository }}
+      TESTED_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a reviewed tools commit
+        env:
+          TOOLS_REF: ${{ vars.REPOSITORY_TOOLS_REF }}
+        run: '[[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: moraxyc/pkgs.moraxyc.com
+          ref: ${{ vars.REPOSITORY_TOOLS_REF }}
+          path: .repository-tools
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build repository tools
+        run: cd .repository-tools && nix develop -c just build
+      - uses: actions/download-artifact@v4
+        with:
+          name: tested-release
+          path: dist
+      - name: Verify Actions artifact handoff
+        run: |
+          nix develop ./.repository-tools -c .repository-tools/.build/moraxyc-repo project-ci verify-artifacts
+  publish-release:
+    needs: artifact-round-trip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PROJECT_ID: ${{ vars.APT_PROJECT_ID }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      PROJECT_REPOSITORY: ${{ github.repository }}
+      TESTED_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a reviewed tools commit
+        env:
+          TOOLS_REF: ${{ vars.REPOSITORY_TOOLS_REF }}
+        run: '[[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: moraxyc/pkgs.moraxyc.com
+          ref: ${{ vars.REPOSITORY_TOOLS_REF }}
+          path: .repository-tools
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build repository tools
+        run: cd .repository-tools && nix develop -c just build
+      - uses: actions/download-artifact@v4
+        with:
+          name: tested-release
+          path: dist
+      - name: Publish immutable Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          nix develop ./.repository-tools -c .repository-tools/.build/moraxyc-repo project-ci publish
+  release-round-trip:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT_ID: ${{ vars.APT_PROJECT_ID }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      PROJECT_REPOSITORY: ${{ github.repository }}
+      TESTED_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a reviewed tools commit
+        env:
+          TOOLS_REF: ${{ vars.REPOSITORY_TOOLS_REF }}
+        run: '[[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: moraxyc/pkgs.moraxyc.com
+          ref: ${{ vars.REPOSITORY_TOOLS_REF }}
+          path: .repository-tools
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build repository tools
+        run: cd .repository-tools && nix develop -c just build
+      - uses: actions/download-artifact@v4
+        with:
+          name: tested-release
+          path: dist
+      - name: Verify immutable Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          nix develop ./.repository-tools -c .repository-tools/.build/moraxyc-repo project-ci verify
+  notify-central:
+    needs: release-round-trip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT_ID: ${{ vars.APT_PROJECT_ID }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      PROJECT_REPOSITORY: ${{ github.repository }}
+      TESTED_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require a reviewed tools commit
+        env:
+          TOOLS_REF: ${{ vars.REPOSITORY_TOOLS_REF }}
+        run: '[[ "$TOOLS_REF" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          repository: moraxyc/pkgs.moraxyc.com
+          ref: ${{ vars.REPOSITORY_TOOLS_REF }}
+          path: .repository-tools
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build repository tools
+        run: cd .repository-tools && nix develop -c just build
+      - name: Notify central repository after successful readback
+        env:
+          GH_TOKEN: ${{ secrets.CENTRAL_DISPATCH_TOKEN }}
+        run: |
+          nix develop ./.repository-tools -c .repository-tools/.build/moraxyc-repo project-ci notify
