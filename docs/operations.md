@@ -8,7 +8,7 @@
 2. 建立离线主密钥和 CI 签名子密钥；审核两个公钥指纹后，只提交 `keys/moraxyc-archive-keyring.gpg`。
 3. 用必需检查项和 CODEOWNERS 保护默认分支，将 `pages-production` 限制到该分支，并配置生产发布审批人。
 4. 在 `publication/context.json` 中填写经评审的 `primary_fingerprint` 和 `signing_fingerprint`，使用大写 40 位指纹。设置仓库变量 `CLOUDFLARE_ACCOUNT_ID` 和 `PAGES_PROJECT`；默认分支规则需允许发布更新器推送输入提交，且更新器不强制推送。
-5. 在 `pages-production` 中以 `APT_SIGNING_SUBKEY` 添加 ASCII-armored 的**秘密子密钥导出**（附不含主私钥的密钥存根）。如有需要，在其中设置 `APT_SIGNING_PASSPHRASE`。`CLOUDFLARE_API_TOKEN` 只放在该环境中，并限制为目标账户的 Pages 部署权限。
+5. 在 `pages-production` 中以 `APT_SIGNING_SUBKEY` 添加经标准 Base64 编码的**秘密子密钥导出**（`gpg --export-secret-subkeys` 的二进制或 ASCII-armored 输出，附不含主私钥的密钥存根）。签名命令在导入前解码。无密码的子密钥无需设置 `APT_SIGNING_PASSPHRASE`；有密码时才设置。`CLOUDFLARE_API_TOKEN` 只放在该环境中，并限制为目标账户的 Pages 部署权限。
 6. 启用一个经过评审的项目，手动发布一次，并记录自定义域名检查和客户端安装结果。
 
 发布流程分为三个 workflow：

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -198,6 +199,18 @@ func executeArtifact(command string, opts artifactOptions) error {
 	return artifact.Verify(opts.directory, opts.project, opts.tag, strings.Split(opts.architectures, ","))
 }
 
+func signingSubkey() ([]byte, error) {
+	encoded := strings.TrimSpace(os.Getenv("APT_SIGNING_SUBKEY"))
+	if encoded == "" {
+		return nil, errors.New("APT_SIGNING_SUBKEY is missing")
+	}
+	secret, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, errors.New("APT_SIGNING_SUBKEY must be a base64-encoded secret subkey export")
+	}
+	return secret, nil
+}
+
 func executeRepository(command string, opts repositoryOptions) error {
 	configData, err := config.LoadRepositoryConfig(filepath.Join(opts.root, "config/repository.toml"))
 	if err != nil {
@@ -287,7 +300,11 @@ func executeRepository(command string, opts repositoryOptions) error {
 		if err = verify.Tree(opts.out, configData, records, key, opts.epoch, opts.primaryFingerprint, opts.signingFingerprint, false, collected.IndexHistory); err != nil {
 			return err
 		}
-		if err = signing.Sign(opts.out, key, []byte(os.Getenv("APT_SIGNING_SUBKEY")), []byte(os.Getenv("APT_SIGNING_PASSPHRASE")), opts.primaryFingerprint, opts.signingFingerprint); err != nil {
+		secret, err := signingSubkey()
+		if err != nil {
+			return err
+		}
+		if err = signing.Sign(opts.out, key, secret, []byte(os.Getenv("APT_SIGNING_PASSPHRASE")), opts.primaryFingerprint, opts.signingFingerprint); err != nil {
 			return err
 		}
 		return verify.Tree(opts.out, configData, records, key, opts.epoch, opts.primaryFingerprint, opts.signingFingerprint, true, collected.IndexHistory)

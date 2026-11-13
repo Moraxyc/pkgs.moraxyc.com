@@ -3,6 +3,7 @@ package signing
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"pkgs.moraxyc.com/internal/safe"
@@ -151,16 +152,13 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 		return e
 	}
 	defer cleanup(h)
-	// Import the CI subkey bundle. The bundle must carry a stub ('#') for the
-	// primary secret key — gpg --export-secret-subkeys produces this layout.
-	// If the primary secret key is present gpg will refuse to import with an
-	// error, so we detect the violation indirectly via a list check after import.
+	// gpg --export-secret-subkeys leaves a primary secret key stub ('#').
 	if _, e = safe.Command(secret, "gpg", "--batch", "--no-options", "--homedir", h, "--import"); e != nil {
-		return e
+		return fmt.Errorf("import CI signing subkey: %w", e)
 	}
 	b, e := safe.Command(nil, "gpg", "--batch", "--no-options", "--homedir", h, "--with-colons", "--list-secret-keys")
 	if e != nil {
-		return e
+		return fmt.Errorf("inspect CI signing subkey: %w", e)
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		f := strings.Split(line, ":")
@@ -179,7 +177,7 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 		output := filepath.Join(h, spec.name)
 		args := []string{"--batch", "--no-options", "--homedir", h, "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--local-user", sub + "!", "--digest-algo", "SHA256", "--output", output, spec.mode, filepath.Join(base, "Release")}
 		if _, e = safe.Command(passphrase, "gpg", args...); e != nil {
-			return e
+			return fmt.Errorf("sign %s: %w", spec.name, e)
 		}
 		data, e := os.ReadFile(output)
 		if e != nil {
