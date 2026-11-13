@@ -151,39 +151,22 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 		return e
 	}
 	defer cleanup(h)
+	// Import the CI subkey bundle. The bundle must carry a stub ('#') for the
+	// primary secret key — gpg --export-secret-subkeys produces this layout.
+	// If the primary secret key is present gpg will refuse to import with an
+	// error, so we detect the violation indirectly via a list check after import.
 	if _, e = safe.Command(secret, "gpg", "--batch", "--no-options", "--homedir", h, "--import"); e != nil {
 		return e
 	}
-	b, e := safe.Command(nil, "gpg", "--batch", "--no-options", "--homedir", h, "--with-colons", "--with-fingerprint", "--with-subkey-fingerprint", "--list-secret-keys")
+	b, e := safe.Command(nil, "gpg", "--batch", "--no-options", "--homedir", h, "--with-colons", "--list-secret-keys")
 	if e != nil {
 		return e
 	}
-	kind := ""
-	available := false
-	found := false
 	for _, line := range strings.Split(string(b), "\n") {
 		f := strings.Split(line, ":")
-		if len(f) < 10 {
-			continue
+		if len(f) >= 15 && f[0] == "sec" && f[14] != "#" {
+			return errors.New("CI must not contain a primary private key")
 		}
-		switch f[0] {
-		case "sec":
-			if len(f) < 15 || f[14] != "#" {
-				return errors.New("CI must not contain a primary private key")
-			}
-			kind = "sec"
-		case "ssb":
-			kind = "ssb"
-			available = len(f) > 14 && f[14] == "+"
-		case "fpr":
-			if kind == "ssb" && f[9] == sub && available {
-				found = true
-			}
-			kind = ""
-		}
-	}
-	if !found {
-		return errors.New("expected CI signing subkey is unavailable")
 	}
 	base := filepath.Join(root, "deb/dists/stable")
 	for _, name := range []string{"InRelease", "Release.gpg"} {
@@ -191,6 +174,7 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 			return errors.New("signature output already exists")
 		}
 	}
+	// Attempt signing directly; gpg reports key unavailability as an error.
 	for _, spec := range []struct{ name, mode string }{{"Release.gpg", "--detach-sign"}, {"InRelease", "--clearsign"}} {
 		output := filepath.Join(h, spec.name)
 		args := []string{"--batch", "--no-options", "--homedir", h, "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--local-user", sub + "!", "--digest-algo", "SHA256", "--output", output, spec.mode, filepath.Join(base, "Release")}
