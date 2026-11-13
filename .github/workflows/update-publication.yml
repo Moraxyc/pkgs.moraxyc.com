@@ -51,6 +51,7 @@ jobs:
         permissions:
             contents: read
         uses: ./.github/workflows/build.yml
+        secrets: inherit
         with:
             source_commit: ${{ needs.update.outputs.commit }}
             publish: true

@@ -68,6 +68,7 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/publish.yml
+    secrets: inherit
     with:
       source_commit: ${{ needs.build.outputs.commit }}
       site: ${{ needs.build.outputs.site }}
