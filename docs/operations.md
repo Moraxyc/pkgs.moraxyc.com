@@ -7,7 +7,7 @@
 1. 创建 Cloudflare Pages Direct Upload 项目，将生产分支设为本仓库默认分支，并以 HTTPS 绑定 `pkgs.moraxyc.com`。
 2. 建立离线主密钥和 CI 签名子密钥；审核两个公钥指纹后，只提交二进制 OpenPGP 公钥环 `keys/moraxyc-archive-keyring.gpg`（`gpg --export`，不加 `--armor`）。已有 ASCII-armored 公钥须先用 `gpg --dearmor` 转换；仅改扩展名不能使其用于 `gpgv --keyring`。
 3. 用必需检查项和 CODEOWNERS 保护默认分支，将 `pages-production` 限制到该分支，并配置生产发布审批人。
-4. 在 `publication/context.json` 中填写经评审的 `primary_fingerprint` 和 `signing_fingerprint`，使用大写 40 位指纹。在 Actions 的 **Variables** 中设置仓库变量 `CLOUDFLARE_ACCOUNT_ID` 和 `PAGES_PROJECT`，不要放在 Secrets 中。前者填写项目所属账户的 32 位十六进制 Account ID，后者填写 Pages 项目名，不是自定义域名、`*.pages.dev` 地址或项目 UUID。两者均不含引号或空白。默认分支规则需允许发布更新器推送输入提交，且更新器不强制推送。
+4. 在 `publication/context.json` 中填写经评审的 `primary_fingerprint` 和 `signing_fingerprint`，使用大写 40 位指纹。在 Actions 的 **Variables** 中设置仓库变量 `CLOUDFLARE_ACCOUNT_ID` 和 `PAGES_PROJECT`，不要放在 Secrets 中。前者填写项目所属账户的 32 位十六进制 Account ID，后者填写 Pages 项目名，不是自定义域名、`*.pages.dev` 地址或项目 UUID。两者均不含引号或空白。依赖更新和发布输入更新均使用同一个 GitHub App 提交并直接推送。需在本仓库安装拥有 **Contents: write** 权限的 App，并配置仓库 secrets `APP_ID`（App Client ID）和 `APP_PRIVATE_KEY`。默认分支规则需允许该 App 推送；如要求 PR 或必需检查，须配置相应绕过权限。更新器不强制推送。
 5. 在 `pages-production` 中以 `APT_SIGNING_SUBKEY` 添加经标准 Base64 编码的**秘密子密钥导出**（`gpg --export-secret-subkeys` 的二进制或 ASCII-armored 输出，附不含主私钥的密钥存根）。签名命令在导入前解码。无密码的子密钥无需设置 `APT_SIGNING_PASSPHRASE`；有密码时才设置。`CLOUDFLARE_API_TOKEN` 只放在该环境中，并限制为目标账户的 Pages 部署权限。
 6. 启用一个经过评审的项目，手动发布一次，并记录自定义域名检查和客户端安装结果。
 
