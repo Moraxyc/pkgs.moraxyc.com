@@ -25,10 +25,10 @@ type Config struct {
 	} `toml:"github"`
 }
 
-// tomlSchema describes the exact key names accepted by a decoded Go value.
-// BurntSushi/toml intentionally matches struct fields case-insensitively, but
-// configuration files use a strict schema, so a key with different casing is
-// still unknown here.
+// tomlSchema maps the case-sensitive key names accepted by a decoded Go
+// struct. BurntSushi/toml matches struct fields case-insensitively, but
+// configuration files use a strict schema, so Base_URL must not silently
+// overwrite base_url.
 type tomlSchema struct {
 	children map[string]*tomlSchema
 	open     bool
@@ -47,7 +47,6 @@ func schemaForTOMLType(t reflect.Type) *tomlSchema {
 	if t.Kind() != reflect.Struct {
 		return &tomlSchema{}
 	}
-
 	s := &tomlSchema{children: map[string]*tomlSchema{}}
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -78,18 +77,13 @@ func mergeTOMLSchema(dst, src *tomlSchema) {
 	if src.open {
 		dst.open = true
 	}
-	if dst.children == nil {
-		dst.children = map[string]*tomlSchema{}
-	}
 	for name, child := range src.children {
 		dst.children[name] = child
 	}
 }
 
-func tomlPathKey(key []string) string {
-	return strings.Join(key, "\x00")
-}
-
+// unknownTOMLKey returns the first key in the TOML document that does not
+// match a struct field tag case-sensitively.
 func unknownTOMLKey(md *toml.MetaData, out any) string {
 	t := reflect.TypeOf(out)
 	if t == nil {
@@ -112,37 +106,9 @@ func unknownTOMLKey(md *toml.MetaData, out any) string {
 	return ""
 }
 
-func duplicateTOMLKey(md *toml.MetaData) string {
-	arrayTables := map[string]struct{}{}
-	for _, key := range md.Keys() {
-		if md.Type(key...) == "ArrayHash" {
-			arrayTables[tomlPathKey(key)] = struct{}{}
-		}
-	}
-	seen := map[string]struct{}{}
-	for _, key := range md.Keys() {
-		keyPath := tomlPathKey(key)
-		if _, ok := arrayTables[keyPath]; ok {
-			continue
-		}
-		isArrayMember := false
-		for i := 1; i < len(key); i++ {
-			if _, ok := arrayTables[tomlPathKey(key[:i])]; ok {
-				isArrayMember = true
-				break
-			}
-		}
-		if isArrayMember {
-			continue
-		}
-		if _, ok := seen[keyPath]; ok {
-			return key.String()
-		}
-		seen[keyPath] = struct{}{}
-	}
-	return ""
-}
-
+// Decode parses a TOML file into out, rejecting unknown fields (including
+// case-mismatched keys), duplicate keys (reported by the parser), and any
+// missing required field paths.
 func Decode(name string, out any, required ...[]string) error {
 	b, e := safe.Regular(name)
 	if e != nil {
@@ -158,12 +124,6 @@ func Decode(name string, out any, required ...[]string) error {
 	}
 	if key := unknownTOMLKey(&m, out); key != "" {
 		return errors.New("unknown TOML field: " + key)
-	}
-	if key := duplicateTOMLKey(&m); key != "" {
-		return errors.New("duplicate TOML field: " + key)
-	}
-	if len(m.Undecoded()) != 0 {
-		return errors.New("unknown TOML field: " + m.Undecoded()[0].String())
 	}
 	for _, k := range required {
 		if !m.IsDefined(k...) {
