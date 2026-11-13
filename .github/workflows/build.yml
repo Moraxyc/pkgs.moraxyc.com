@@ -36,7 +36,7 @@ jobs:
         run: nix build .#site
       - name: Export publication and runtime closure
         id: bundle
-        shell: result/tools/bin/bash --noprofile --norc -euo pipefail {0}
+        shell: bash --noprofile --norc -euo pipefail {0}
         run: |
           export PATH="$PWD/result/tools/bin:$PATH"
           mkdir -p .build
