@@ -12,7 +12,7 @@
 
 [`manifest-v1.json`](../schemas/manifest-v1.json) 内嵌在 Go 二进制中。JSON Schema 校验先于语义校验；重复键和尾随数据拒绝。版本 1 接受 `Package`、`Version`、`Architecture`、`Filename`、`Size`、`SHA256`、`Description` 及可选的 `Depends`，不透传其他 control 字段。Description 续行以一个空格开头，空段落编码为 ` .`，其他控制字符禁止出现。
 
-清单中的 `Filename` 是精确的 `.deb` 资产名，生成的 APT `Filename` 来自匹配的 pool 模板。所有 Release 都保留，不选择隐式的最新版本。已启用注册表中出现重复的包/版本/架构三元组会失败。
+清单中的 `Filename` 是精确的 `.deb` 资产名，生成的 APT `Filename` 来自匹配的 pool 模板。所有符合项目策略且带有指定清单的 Release 都保留，不选择隐式的最新版本。没有指定清单的 Release 直接跳过；清单存在但无效时，刷新仍会失败。已启用注册表中出现重复的包/版本/架构三元组会失败。
 
 收集器通过 GitHub API 读取 Release 和资产分页，只下载选中的清单资产；可用时校验清单资产的大小和摘要，并校验每个软件包资产的大小及可选的 API 摘要。缺少摘要的资产保持**未验证**状态。中央服务不证明软件包二进制内容，该证明来自项目最终的 Release 回读。
 

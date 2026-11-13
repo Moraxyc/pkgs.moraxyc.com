@@ -8,12 +8,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"pkgs.moraxyc.com/internal/config"
-	"pkgs.moraxyc.com/internal/projects"
-	"pkgs.moraxyc.com/internal/snapshot"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"pkgs.moraxyc.com/internal/config"
+	"pkgs.moraxyc.com/internal/projects"
+	"pkgs.moraxyc.com/internal/snapshot"
 )
 
 func TestFullCollectionRejectsIncompleteResponses(t *testing.T) {
@@ -42,7 +44,11 @@ func TestFullCollectionRejectsIncompleteResponses(t *testing.T) {
 					return
 				}
 				if r.URL.Query().Get("page") == "2" {
-					json.NewEncoder(w).Encode([]any{map[string]any{"id": 999, "draft": true, "prerelease": false}, map[string]any{"id": 998, "draft": false, "prerelease": true}})
+					json.NewEncoder(w).Encode([]any{
+						map[string]any{"id": 999, "draft": true, "prerelease": false},
+						map[string]any{"id": 998, "draft": false, "prerelease": true},
+						map[string]any{"id": 997, "tag_name": "v0.9", "draft": false, "prerelease": false, "published_at": "2026-09-01T00:00:00Z"},
+					})
 					return
 				}
 				w.Header().Set("Link", "<"+server.URL+prefix+"?page=2>; rel=\"next\"")
@@ -57,6 +63,14 @@ func TestFullCollectionRejectsIncompleteResponses(t *testing.T) {
 					rows = append(rows, map[string]any{"id": release.ID, "tag_name": release.Tag, "draft": false, "prerelease": release.Prerelease, "published_at": release.PublishedAt})
 				}
 				json.NewEncoder(w).Encode(rows)
+				return
+			}
+			if r.URL.Path == prefix+"/997/assets" {
+				assets := []any{}
+				if mode != "empty-release" {
+					assets = append(assets, map[string]any{"id": 996, "name": "legacy.tar.gz", "size": 1234})
+				}
+				json.NewEncoder(w).Encode(assets)
 				return
 			}
 			for _, release := range p.Releases {
@@ -74,6 +88,15 @@ func TestFullCollectionRejectsIncompleteResponses(t *testing.T) {
 					}
 					if mode == "duplicate-asset" {
 						assets = append(assets, assets[0])
+					}
+					if mode == "duplicate-manifest" {
+						assets = append(assets, assets[len(assets)-1])
+					}
+					if mode == "invalid-manifest-size" || mode == "manifest-only" {
+						assets[len(assets)-1].Size = 0
+						if mode == "manifest-only" {
+							assets = assets[len(assets)-1:]
+						}
 					}
 					json.NewEncoder(w).Encode(assets)
 					return
@@ -115,11 +138,34 @@ func TestFullCollectionRejectsIncompleteResponses(t *testing.T) {
 	if e != nil || len(records) != 5 {
 		t.Fatalf("incomplete collection: %v", e)
 	}
-	mode = "cross-origin"
-	if _, err := client.Collect(context.Background(), c, ps, now); err != nil {
-		t.Fatalf("pagination should use only the page number on the original resource: %v", err)
+	for _, success := range []string{"cross-origin", "empty-release"} {
+		t.Run(success, func(t *testing.T) {
+			mode = success
+			collected, err := client.Collect(context.Background(), c, ps, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(collected, got) {
+				t.Fatal("non-package releases changed the collected snapshot")
+			}
+		})
 	}
-	for _, failure := range []string{"missing-manifest", "duplicate-asset", "corrupt-json", "oversize", "cycle", "rate-limit"} {
+	t.Run("missing-manifest", func(t *testing.T) {
+		mode = "missing-manifest"
+		collected, err := client.Collect(context.Background(), c, ps, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(collected.Projects) != len(got.Projects) {
+			t.Fatal("collection lost an enabled project")
+		}
+		for _, p := range collected.Projects {
+			if len(p.Releases) != 0 {
+				t.Fatal("release without manifest was collected")
+			}
+		}
+	})
+	for _, failure := range []string{"duplicate-asset", "duplicate-manifest", "invalid-manifest-size", "manifest-only", "corrupt-json", "oversize", "cycle", "rate-limit"} {
 		t.Run(failure, func(t *testing.T) {
 			mode = failure
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -127,6 +173,9 @@ func TestFullCollectionRejectsIncompleteResponses(t *testing.T) {
 			_, e := client.Collect(ctx, c, ps, now)
 			if e == nil {
 				t.Fatal("failed refresh succeeded")
+			}
+			if failure == "invalid-manifest-size" && !strings.Contains(e.Error(), `project alpha: release 103 tag "v1.0-1": manifest missing or invalid size`) {
+				t.Fatalf("missing release context: %v", e)
 			}
 		})
 	}

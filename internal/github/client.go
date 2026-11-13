@@ -394,7 +394,7 @@ func (c *Client) collectRelease(ctx context.Context, cfg config.Config, p projec
 		}
 	}
 	if selected == nil {
-		return r, false, errors.New("manifest missing or invalid size")
+		return r, true, nil
 	}
 	b, err := c.downloadManifest(ctx, api, owner, repo, *selected)
 	if err != nil {
@@ -417,8 +417,11 @@ func (c *Client) collectProject(ctx context.Context, cfg config.Config, p projec
 		return api.Repositories.ListReleases(ctx, owner, repo, opts)
 	}, func(api_release *github.RepositoryRelease) error {
 		r, skip, e := c.collectRelease(ctx, cfg, p, api, owner, repo, api_release)
-		if e != nil || skip {
-			return e
+		if e != nil {
+			return fmt.Errorf("release %d tag %q: %w", api_release.GetID(), api_release.GetTagName(), e)
+		}
+		if skip {
+			return nil
 		}
 		sp.Releases = append(sp.Releases, r)
 		return nil
