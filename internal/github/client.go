@@ -338,6 +338,94 @@ func (c *Client) download(ctx context.Context, api *github.Client, owner, repo s
 	return b, nil
 }
 
+func (c *Client) downloadManifest(ctx context.Context, api *github.Client, owner, repo string, asset manifest.Asset) ([]byte, error) {
+	if asset.ID <= 0 || asset.Size <= 0 || asset.Size > 1<<20 {
+		return nil, errors.New("manifest missing or invalid size")
+	}
+	b, err := c.download(ctx, api, owner, repo, asset.ID)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) != asset.Size {
+		return nil, errors.New("manifest asset size mismatch")
+	}
+	if asset.Digest != "" && asset.Digest != fmt.Sprintf("sha256:%x", sha256.Sum256(b)) {
+		return nil, errors.New("manifest asset digest mismatch")
+	}
+	return b, nil
+}
+
+func (c *Client) collectRelease(ctx context.Context, cfg config.Config, p projects.Project, api *github.Client, owner, repo string, api_release *github.RepositoryRelease) (snapshot.Release, bool, error) {
+	if api_release.Draft == nil || api_release.Prerelease == nil || api_release.GetID() <= 0 {
+		return snapshot.Release{}, false, errors.New("invalid release metadata")
+	}
+	if *api_release.Draft || *api_release.Prerelease && !p.Source.IncludePrereleases {
+		return snapshot.Release{}, true, nil // skip
+	}
+	if api_release.PublishedAt == nil {
+		return snapshot.Release{}, false, errors.New("missing release publication time")
+	}
+	if !safe.Segment(api_release.GetTagName()) {
+		return snapshot.Release{}, false, errors.New("unsafe release tag")
+	}
+	r := snapshot.Release{
+		ID:          api_release.GetID(),
+		Tag:         api_release.GetTagName(),
+		Prerelease:  *api_release.Prerelease,
+		PublishedAt: api_release.GetPublishedAt().UTC().Format(time.RFC3339),
+		Assets:      []manifest.Asset{},
+	}
+	err := list(func(opts *github.ListOptions) ([]*github.ReleaseAsset, *github.Response, error) {
+		return api.Repositories.ListReleaseAssets(ctx, owner, repo, api_release.GetID(), opts)
+	}, func(a *github.ReleaseAsset) error {
+		r.Assets = append(r.Assets, manifest.Asset{ID: a.GetID(), Name: a.GetName(), Size: int64(a.GetSize()), Digest: a.GetDigest()})
+		return nil
+	})
+	if err != nil {
+		return r, false, err
+	}
+	var selected *manifest.Asset
+	for i := range r.Assets {
+		if r.Assets[i].Name == p.Source.ManifestAsset {
+			if selected != nil {
+				return r, false, errors.New("duplicate manifest asset")
+			}
+			selected = &r.Assets[i]
+		}
+	}
+	if selected == nil {
+		return r, false, errors.New("manifest missing or invalid size")
+	}
+	b, err := c.downloadManifest(ctx, api, owner, repo, *selected)
+	if err != nil {
+		return r, false, err
+	}
+	r.Manifest, err = manifest.Parse(b)
+	if err != nil {
+		return r, false, err
+	}
+	if err = r.Manifest.ValidateRelease(cfg, p, r.Tag, r.Assets); err != nil {
+		return r, false, err
+	}
+	return r, false, nil
+}
+
+func (c *Client) collectProject(ctx context.Context, cfg config.Config, p projects.Project, api *github.Client) (snapshot.Project, error) {
+	owner, repo, _ := strings.Cut(p.Source.Repository, "/")
+	sp := snapshot.Project{ID: p.ID, Repository: p.Source.Repository, Releases: []snapshot.Release{}}
+	err := list(func(opts *github.ListOptions) ([]*github.RepositoryRelease, *github.Response, error) {
+		return api.Repositories.ListReleases(ctx, owner, repo, opts)
+	}, func(api_release *github.RepositoryRelease) error {
+		r, skip, e := c.collectRelease(ctx, cfg, p, api, owner, repo, api_release)
+		if e != nil || skip {
+			return e
+		}
+		sp.Releases = append(sp.Releases, r)
+		return nil
+	})
+	return sp, err
+}
+
 func (c *Client) Collect(ctx context.Context, cfg config.Config, ps []projects.Project, now time.Time) (snapshot.Snapshot, error) {
 	s := snapshot.Snapshot{Schema: 1, Projects: []snapshot.Project{}}
 	s.Collection.CompletedAt = now.UTC().Format(time.RFC3339)
@@ -357,66 +445,7 @@ func (c *Client) Collect(ctx context.Context, cfg config.Config, ps []projects.P
 		if !p.Source.Enabled {
 			continue
 		}
-		sp := snapshot.Project{ID: p.ID, Repository: p.Source.Repository, Releases: []snapshot.Release{}}
-		owner, repo, _ := strings.Cut(p.Source.Repository, "/")
-		err := list(func(opts *github.ListOptions) ([]*github.RepositoryRelease, *github.Response, error) {
-			return apiClient.Repositories.ListReleases(ctx, owner, repo, opts)
-		}, func(api *github.RepositoryRelease) error {
-			if api.Draft == nil || api.Prerelease == nil || api.GetID() <= 0 {
-				return errors.New("invalid release metadata")
-			}
-			if *api.Draft || *api.Prerelease && !p.Source.IncludePrereleases {
-				return nil
-			}
-			if api.PublishedAt == nil {
-				return errors.New("missing release publication time")
-			}
-			if !safe.Segment(api.GetTagName()) {
-				return errors.New("unsafe release tag")
-			}
-			r := snapshot.Release{ID: api.GetID(), Tag: api.GetTagName(), Prerelease: *api.Prerelease, PublishedAt: api.GetPublishedAt().UTC().Format(time.RFC3339), Assets: []manifest.Asset{}}
-			e := list(func(opts *github.ListOptions) ([]*github.ReleaseAsset, *github.Response, error) {
-				return apiClient.Repositories.ListReleaseAssets(ctx, owner, repo, api.GetID(), opts)
-			}, func(a *github.ReleaseAsset) error {
-				r.Assets = append(r.Assets, manifest.Asset{ID: a.GetID(), Name: a.GetName(), Size: int64(a.GetSize()), Digest: a.GetDigest()})
-				return nil
-			})
-			if e != nil {
-				return e
-			}
-			var selected *manifest.Asset
-			for i := range r.Assets {
-				a := &r.Assets[i]
-				if a.Name == p.Source.ManifestAsset {
-					if selected != nil {
-						return errors.New("duplicate manifest asset")
-					}
-					selected = a
-				}
-			}
-			if selected == nil || selected.ID <= 0 || selected.Size <= 0 || selected.Size > 1<<20 {
-				return errors.New("manifest missing or invalid size")
-			}
-			b, e := c.download(ctx, apiClient, owner, repo, selected.ID)
-			if e != nil {
-				return e
-			}
-			if int64(len(b)) != selected.Size {
-				return errors.New("manifest asset size mismatch")
-			}
-			if selected.Digest != "" && selected.Digest != fmt.Sprintf("sha256:%x", sha256.Sum256(b)) {
-				return errors.New("manifest asset digest mismatch")
-			}
-			r.Manifest, e = manifest.Parse(b)
-			if e != nil {
-				return e
-			}
-			if e = r.Manifest.ValidateRelease(cfg, p, r.Tag, r.Assets); e != nil {
-				return e
-			}
-			sp.Releases = append(sp.Releases, r)
-			return nil
-		})
+		sp, err := c.collectProject(ctx, cfg, p, apiClient)
 		if err != nil {
 			return s, fmt.Errorf("project %s: %w", p.ID, err)
 		}
