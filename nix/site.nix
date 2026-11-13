@@ -29,7 +29,6 @@
             mv "$TMPDIR/public" "$out/public"
             cp ${../publication/snapshot.json} "$out/snapshot.json"
             cp ${../publication/context.json} "$out/publication.json"
-            ln -s ${config.packages.publication-tools} "$out/tools"
           '';
     };
 }

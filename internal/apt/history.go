@@ -29,8 +29,8 @@ func retainedIndexes(history map[string]snapshot.HistoricalIndex, epoch int64) (
 	return out, nil
 }
 
-// RetainIndexes persists exact index bytes until their Release validity and
-// downstream cache lifetime have both elapsed, including across skipped deploys.
+// RetainIndexes retains by-hash bytes through Release validity plus 300 seconds
+// of downstream caching, including across skipped deployments.
 func RetainIndexes(c config.Config, records []snapshot.Record, history map[string]snapshot.HistoricalIndex, epoch int64) (map[string]snapshot.HistoricalIndex, error) {
 	out, err := retainedIndexes(history, epoch)
 	if err != nil {

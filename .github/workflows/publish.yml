@@ -37,18 +37,16 @@ jobs:
         with:
           name: ${{ inputs.artifact }}
           path: .build
-      - name: Restore prebuilt site and tools
+      - name: Check prebuilt publication inputs
         run: |
-          nix-store --import < .build/publication.nar
-          export PATH="$SITE_STORE_PATH/tools/bin:$PATH"
-          echo "$SITE_STORE_PATH/tools/bin" >> "$GITHUB_PATH"
           test "$(cat .build/source-commit)" = "$SOURCE_COMMIT"
-          cp "$SITE_STORE_PATH/snapshot.json" .build/snapshot.json
-          cp "$SITE_STORE_PATH/publication.json" .build/publication.json
           cmp publication/snapshot.json .build/snapshot.json
           cmp publication/context.json .build/publication.json
-          cp -R "$SITE_STORE_PATH/public" .build/public
           chmod -R u+w .build/public
+      - name: Prepare locked publication tools
+        run: |
+          nix build .#publication-tools --out-link .build/publication-tools
+          echo "$PWD/.build/publication-tools/bin" >> "$GITHUB_PATH"
       - name: Reject superseded source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -81,7 +79,7 @@ jobs:
             echo "trigger=$GITHUB_EVENT_NAME"
             jq -r '"epoch=\(.epoch)\nprimary_fingerprint=\(.primary_fingerprint)\nsigning_fingerprint=\(.signing_fingerprint)"' .build/publication.json
             echo "site=$SITE_STORE_PATH"
-            echo "tools=$(readlink -f "$SITE_STORE_PATH/tools")"
+            echo "tools=$(readlink -f .build/publication-tools)"
             sha256sum flake.lock nix/vendor-hash .build/snapshot.json .build/publication.json .build/public/deb/dists/stable/Release
           } > .build/audit.txt
           cat .build/audit.txt >> "$GITHUB_STEP_SUMMARY"

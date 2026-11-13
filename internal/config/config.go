@@ -100,7 +100,6 @@ func unknownTOMLKey(md *toml.MetaData, out any) string {
 	return ""
 }
 
-// Decode rejects unknown or case-mismatched keys, duplicate keys, and missing required paths.
 func Decode(name string, out any, required ...[]string) error {
 	b, e := safe.Regular(name)
 	if e != nil {

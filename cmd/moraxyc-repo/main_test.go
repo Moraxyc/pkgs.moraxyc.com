@@ -17,7 +17,6 @@ func TestSigningSubkey(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			encoded := base64.StdEncoding.EncodeToString(test.key)
-			// Standard base64 exports may be wrapped across lines.
 			encoded = "\n" + encoded[:4] + "\r\n" + encoded[4:] + "\n"
 			t.Setenv("APT_SIGNING_SUBKEY", encoded)
 			secret, err := signingSubkey()

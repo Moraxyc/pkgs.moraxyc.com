@@ -139,7 +139,7 @@ func TestPublishResumesDraftAndRejectsChangedAssets(t *testing.T) {
 	if published {
 		t.Fatal("failed upload published a release")
 	}
-	// A completed asset with unexpected bytes must never be overwritten or published.
+	// Completed upload with changed remote bytes.
 	var manifestAsset *asset
 	for _, a := range assets {
 		if a.Name == "moraxyc-manifest.json" {

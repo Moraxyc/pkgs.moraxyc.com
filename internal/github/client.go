@@ -188,7 +188,7 @@ func (a *API) ListReleaseAssets(ctx context.Context, owner, repo string, release
 	return assets, err
 }
 
-// DeleteFailedAsset removes only an upload placeholder identified by the caller.
+// DeleteFailedAsset requires the caller to check that id identifies a starter upload.
 func (a *API) DeleteFailedAsset(ctx context.Context, owner, repo string, id int64) error {
 	_, err := a.client.Repositories.DeleteReleaseAsset(ctx, owner, repo, id)
 	return githubOperationError(err)
@@ -247,8 +247,8 @@ func (a *API) assetReader(ctx context.Context, owner, repo string, id int64) (io
 	return resp.Body, nil
 }
 
-// DownloadReleaseAsset writes an asset to path and checks the API-reported
-// size when it is non-negative.
+// DownloadReleaseAsset requires a nonexistent path. A negative expectedSize skips
+// size validation. On failure, any file created by this call is removed.
 func (a *API) DownloadReleaseAsset(ctx context.Context, owner, repo string, id int64, path string, expectedSize int64) error {
 	body, err := a.assetReader(ctx, owner, repo, id)
 	if err != nil {

@@ -34,11 +34,10 @@ jobs:
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
       - name: Build unsigned publication
         run: nix build .#site
-      - name: Export publication and runtime closure
+      - name: Export unsigned publication
         id: bundle
         shell: bash --noprofile --norc -euo pipefail {0}
         run: |
-          export PATH="$PWD/result/tools/bin:$PATH"
           mkdir -p .build
           site=$(readlink -f result)
           commit=$(git rev-parse HEAD)
@@ -49,16 +48,17 @@ jobs:
             echo "artifact=$artifact"
           } >> "$GITHUB_OUTPUT"
           echo "$commit" > .build/source-commit
-          nix-store --query --requisites "$site" > .build/closure-paths.txt
-          mapfile -t paths < .build/closure-paths.txt
-          nix-store --export "${paths[@]}" > .build/publication.nar
+          cp "$site/snapshot.json" .build/snapshot.json
+          cp "$site/publication.json" .build/publication.json
+          cp -R "$site/public" .build/public
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.bundle.outputs.artifact }}
           path: |
             .build/source-commit
-            .build/publication.nar
-            .build/closure-paths.txt
+            .build/snapshot.json
+            .build/publication.json
+            .build/public/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
