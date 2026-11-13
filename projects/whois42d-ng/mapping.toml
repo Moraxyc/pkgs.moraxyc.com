@@ -1,0 +1,5 @@
+[[rules]]
+package = "whois42d-ng"
+architecture = "*"
+asset = "whois42d-ng_*.deb"
+pool = "pool/{project}/{release_tag}/{filename}"

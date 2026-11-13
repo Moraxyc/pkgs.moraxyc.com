@@ -1,0 +1,5 @@
+[project]
+repository = "moraxyc/whois42d-ng"
+enabled = true
+manifest_asset = "moraxyc-manifest.json"
+include_prereleases = false
