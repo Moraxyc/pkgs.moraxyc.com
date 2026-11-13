@@ -91,6 +91,25 @@ func Release(c config.Config, root string, epoch int64) ([]byte, error) {
 	b = append([]byte("Valid-Until: "+until.Format(time.RFC1123Z)+"\n"), b...)
 	return b, nil
 }
+// PublicFiles constructs the complete expected set of files for the public
+// tree from the given inputs. Both Render and verify.Tree use this function so
+// that the definition of "what belongs in the public tree" lives in one place.
+func PublicFiles(c config.Config, rs []snapshot.Record, key []byte, epoch int64, history map[string]snapshot.HistoricalIndex) (map[string][]byte, error) {
+	files, e := PublicationIndexes(c, rs, history, epoch)
+	if e != nil {
+		return nil, e
+	}
+	routes, e := redirects.Render(rs)
+	if e != nil {
+		return nil, e
+	}
+	files["_redirects"] = routes
+	files["_headers"] = []byte(redirects.Headers)
+	files["404.html"] = []byte(redirects.NotFound)
+	files["deb/keys/moraxyc-archive-keyring.gpg"] = key
+	return files, nil
+}
+
 func Render(c config.Config, rs []snapshot.Record, key []byte, epoch int64, out string, history map[string]snapshot.HistoricalIndex) error {
 	if _, e := os.Lstat(out); e == nil {
 		return errors.New("output already exists; choose a new build directory")
@@ -105,18 +124,10 @@ func Render(c config.Config, rs []snapshot.Record, key []byte, epoch int64, out 
 		return e
 	}
 	defer os.RemoveAll(tmp)
-	files, e := PublicationIndexes(c, rs, history, epoch)
+	files, e := PublicFiles(c, rs, key, epoch, history)
 	if e != nil {
 		return e
 	}
-	routes, e := redirects.Render(rs)
-	if e != nil {
-		return e
-	}
-	files["_redirects"] = routes
-	files["_headers"] = []byte(redirects.Headers)
-	files["404.html"] = []byte(redirects.NotFound)
-	files["deb/keys/moraxyc-archive-keyring.gpg"] = key
 	for name, b := range files {
 		if e = safe.Atomic(filepath.Join(tmp, name), b); e != nil {
 			return e

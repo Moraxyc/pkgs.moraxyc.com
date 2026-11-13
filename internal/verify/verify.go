@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"pkgs.moraxyc.com/internal/apt"
 	"pkgs.moraxyc.com/internal/config"
-	"pkgs.moraxyc.com/internal/redirects"
 	"pkgs.moraxyc.com/internal/safe"
 	"pkgs.moraxyc.com/internal/signing"
 	"pkgs.moraxyc.com/internal/snapshot"
@@ -17,18 +16,13 @@ func Tree(root string, c config.Config, rs []snapshot.Record, key []byte, epoch 
 	if e := signing.PublicAt(key, primary, sub, epoch); e != nil {
 		return e
 	}
-	files, e := apt.PublicationIndexes(c, rs, history, epoch)
+	// PublicFiles is the single authoritative definition of what belongs in
+	// the public tree. Both Render and Tree use it so that any divergence
+	// between what was written and what is expected is caught here.
+	files, e := apt.PublicFiles(c, rs, key, epoch, history)
 	if e != nil {
 		return e
 	}
-	routes, e := redirects.Render(rs)
-	if e != nil {
-		return e
-	}
-	files["_redirects"] = routes
-	files["_headers"] = []byte(redirects.Headers)
-	files["404.html"] = []byte(redirects.NotFound)
-	files["deb/keys/moraxyc-archive-keyring.gpg"] = key
 	release, e := safe.Regular(filepath.Join(root, "deb/dists/stable/Release"))
 	if e != nil {
 		return e
