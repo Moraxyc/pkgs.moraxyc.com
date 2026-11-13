@@ -49,7 +49,7 @@ moraxyc-repo verify-artifacts --artifacts dist --project example --tag v1.0.0
 
 - `APT_PROJECT_ID`：经过评审的中央目录 ID。
 - `REPOSITORY_TOOLS_REF`：本工具仓库经过评审的 40 位提交 SHA。模板拒绝分支名或空值。
-- `CENTRAL_DISPATCH_TOKEN`：只被允许向中央仓库发送 dispatch 的凭据，仅在通知步骤中提供给项目工具的通知步骤。
+- `CENTRAL_DISPATCH_TOKEN`：只被允许向中央仓库发送 dispatch 的凭据，仅在通知步骤中提供。
 
 模板发布稳定的 `v*` 标签。如果需要 prerelease，请把两处项目门禁调用改为使用 `--prerelease`，并评审中央项目的 `include_prereleases` 策略。如果架构不同，还要修改复制后的工作流中的 `moraxyc-repo project-ci` 命令及中央策略。
 
@@ -57,6 +57,6 @@ moraxyc-repo verify-artifacts --artifacts dist --project example --tag v1.0.0
 
 上传中断会留下草稿，中央收集器会忽略它。重跑同一标签时会找到该草稿，删除失败上传的 `starter` 占位资产，并只补齐缺失文件，不替换已完成的资产。全部资产下载后须与已测试文件集一致，再次确认标签指向被测试的提交后才公开。资产被修改或出现额外资产时校验失败，需要评审恢复方案。重跑已公开的标签只校验其资产；旧工具留下的不完整公开 Release 仍须显式恢复。
 
-中央收集器直接跳过没有指定清单的 Release，包括已有 `.deb` 资产的历史 Release；要将它们纳入 APT 索引，须提供有效清单。清单存在但无效时，刷新仍会失败。
+要将历史 Release 纳入 APT 索引，须为它们提供有效清单。
 
 首次门禁成功后保存中央快照并预览。确认预期的包/版本/架构记录和 pool URL 后再启用项目，并将首次 `apt update`、包查询和 `apt install` 结果记入生产验收记录。

@@ -41,8 +41,8 @@ nix develop -c just site
 # Unsigned public tree: .build/site/public
 ```
 
-site 产物包含未签名站点 `public/`、输入文件 `snapshot.json` 和 `publication.json`，以及指向发布工具的 `tools`。只部署 `public/`。`just site` 和 CI 均通过 `nix build .#site` 使用锁定工具链。
+site 产物包含未签名站点 `public/`、输入文件 `snapshot.json` 和 `publication.json`，以及指向发布工具的 `tools`。只部署 `public/`。
 
-`publication/context.json` 固定 `epoch`、`primary_fingerprint` 和 `signing_fingerprint`。`nix/site.nix` 提供 `packages.site`，使用 Git 跟踪的发布输入、锁定工具链、UTC 和 C locale 渲染，并按记录的 epoch 检查公钥有效期。求值为纯模式，构建不访问网络或签名凭据。初始参数尚未配置；构建生产 site 前需填写正数 epoch、经评审的指纹并提供公钥环。收集 GitHub 数据属于外部输入更新，重放必须使用已保存的快照。
+`publication/context.json` 固定 `epoch`、`primary_fingerprint` 和 `signing_fingerprint`。`nix/site.nix` 提供 `packages.site`，使用 Git 跟踪的发布输入、锁定工具链、UTC 和 C locale 渲染，并按记录的 epoch 检查公钥有效期。求值为纯模式，构建不访问网络或签名凭据。收集 GitHub 数据属于外部输入更新，重放必须使用已保存的快照。
 
 配置和密钥环必须来自同一已审计提交。相同的快照、配置、公钥环、epoch 和工具链应产生逐字节一致的未签名输出。签名包含签名时间，只验证签名，不比较字节。回滚到已过期的元数据需要新的显式 epoch 和签名；不要关闭 APT 过期检查。

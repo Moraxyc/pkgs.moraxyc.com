@@ -55,9 +55,7 @@ nix build .#moraxyc-repo
 
 `render`、`verify`、`sign`、`apt-smoke`、`smoke` 需要 `--primary-fingerprint`、`--signing-fingerprint`、`--epoch`（或 `SOURCE_DATE_EPOCH`）；签名后使用 `verify --signed`。显式 flag 可覆盖路径，`--root` 只选择配置和项目注册表。渲染离线执行，快照必须包含全部且仅包含已启用项目。
 
-## 生产就绪状态
-
-实现和合成预览可用，生产环境尚未配置：`projects/` 没有启用项目，`keys/` 没有归档密钥环。维护者仍需提供经评审的公钥、签名指纹、CI 密钥、Pages 项目和自定义域名；完成前发布流程会失败。本地检查不会创建生产服务。
+## 发布
 
 - [契约与离线重放](docs/contracts.md)
 - [项目接入与发布门禁](docs/project-onboarding.md)

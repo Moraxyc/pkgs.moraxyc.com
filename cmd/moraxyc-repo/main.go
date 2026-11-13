@@ -50,9 +50,6 @@ func main() {
 	}
 }
 
-// run executes a fresh command tree for each invocation. Keeping construction
-// local makes nested workflow calls independent and keeps command state out of
-// package globals.
 func run(args []string) error {
 	command := newRootCommand()
 	command.SetArgs(args)

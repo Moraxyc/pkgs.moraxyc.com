@@ -104,9 +104,6 @@ func newProjectCICommand() *cobra.Command {
 	return command
 }
 
-// projectCI is retained as a small compatibility wrapper for callers that
-// used the old entry point directly. The actual argument parsing is handled by
-// the Cobra command tree.
 func projectCI(args []string) error {
 	command := newProjectCICommand()
 	command.SetArgs(args)
@@ -317,8 +314,7 @@ func roundTripVerify(ctx context.Context, client *githubclient.API, owner, repo 
 }
 
 func finalizeRelease(ctx context.Context, client *githubclient.API, owner, repo string, current *githubclient.Release, opts projectCIOptions) error {
-	// Re-check commit before publishing to guard against tag moves between
-	// the initial check and the publish step.
+	// The tag may have moved during asset upload and verification.
 	if err := checkCommit(ctx, client, owner, repo, opts); err != nil {
 		return err
 	}
@@ -366,8 +362,6 @@ func newCentralCommand() *cobra.Command {
 	return command
 }
 
-// central is retained as a compatibility wrapper for callers that used the
-// old entry point directly.
 func central(args []string) error {
 	command := newCentralCommand()
 	command.SetArgs(args)
@@ -432,8 +426,6 @@ func newUpdatePublicationCommand() *cobra.Command {
 	}
 }
 
-// updatePublication is retained as a compatibility wrapper for callers that
-// used the old entry point directly.
 func updatePublication(args []string) error {
 	command := newUpdatePublicationCommand()
 	command.SetArgs(args)

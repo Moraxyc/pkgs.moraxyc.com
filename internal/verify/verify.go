@@ -16,9 +16,6 @@ func Tree(root string, c config.Config, rs []snapshot.Record, key []byte, epoch 
 	if e := signing.PublicAt(key, primary, sub, epoch); e != nil {
 		return e
 	}
-	// PublicFiles is the single authoritative definition of what belongs in
-	// the public tree. Both Render and Tree use it so that any divergence
-	// between what was written and what is expected is caught here.
 	files, e := apt.PublicFiles(c, rs, key, epoch, history)
 	if e != nil {
 		return e

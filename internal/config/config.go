@@ -25,10 +25,6 @@ type Config struct {
 	} `toml:"github"`
 }
 
-// tomlSchema maps the case-sensitive key names accepted by a decoded Go
-// struct. BurntSushi/toml matches struct fields case-insensitively, but
-// configuration files use a strict schema, so Base_URL must not silently
-// overwrite base_url.
 type tomlSchema struct {
 	children map[string]*tomlSchema
 	open     bool
@@ -82,8 +78,6 @@ func mergeTOMLSchema(dst, src *tomlSchema) {
 	}
 }
 
-// unknownTOMLKey returns the first key in the TOML document that does not
-// match a struct field tag case-sensitively.
 func unknownTOMLKey(md *toml.MetaData, out any) string {
 	t := reflect.TypeOf(out)
 	if t == nil {
@@ -106,9 +100,7 @@ func unknownTOMLKey(md *toml.MetaData, out any) string {
 	return ""
 }
 
-// Decode parses a TOML file into out, rejecting unknown fields (including
-// case-mismatched keys), duplicate keys (reported by the parser), and any
-// missing required field paths.
+// Decode rejects unknown or case-mismatched keys, duplicate keys, and missing required paths.
 func Decode(name string, out any, required ...[]string) error {
 	b, e := safe.Regular(name)
 	if e != nil {
@@ -122,6 +114,7 @@ func Decode(name string, out any, required ...[]string) error {
 		}
 		return errors.New("invalid TOML")
 	}
+	// BurntSushi/toml accepts case variants, but configuration keys must match exactly.
 	if key := unknownTOMLKey(&m, out); key != "" {
 		return errors.New("unknown TOML field: " + key)
 	}

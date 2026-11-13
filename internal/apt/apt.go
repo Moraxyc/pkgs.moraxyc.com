@@ -92,9 +92,6 @@ func Release(c config.Config, root string, epoch int64) ([]byte, error) {
 	return b, nil
 }
 
-// PublicFiles constructs the complete expected set of files for the public
-// tree from the given inputs. Both Render and verify.Tree use this function so
-// that the definition of "what belongs in the public tree" lives in one place.
 func PublicFiles(c config.Config, rs []snapshot.Record, key []byte, epoch int64, history map[string]snapshot.HistoricalIndex) (map[string][]byte, error) {
 	files, e := PublicationIndexes(c, rs, history, epoch)
 	if e != nil {

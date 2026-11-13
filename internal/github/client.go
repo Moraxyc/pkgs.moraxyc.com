@@ -67,9 +67,6 @@ func (c *Client) apiClient() (*github.Client, error) {
 	return api, nil
 }
 
-// API is one authenticated GitHub API client and the guarded asset transport
-// associated with it. Callers that need several GitHub operations should open
-// one API session and reuse it for the whole operation.
 type API struct {
 	client         *github.Client
 	downloadClient *http.Client
@@ -360,7 +357,7 @@ func (c *Client) collectRelease(ctx context.Context, cfg config.Config, p projec
 		return snapshot.Release{}, false, errors.New("invalid release metadata")
 	}
 	if *api_release.Draft || *api_release.Prerelease && !p.Source.IncludePrereleases {
-		return snapshot.Release{}, true, nil // skip
+		return snapshot.Release{}, true, nil
 	}
 	if api_release.PublishedAt == nil {
 		return snapshot.Release{}, false, errors.New("missing release publication time")

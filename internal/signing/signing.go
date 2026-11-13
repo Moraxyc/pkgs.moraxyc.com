@@ -156,7 +156,6 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 		return e
 	}
 	defer cleanup(h)
-	// gpg --export-secret-subkeys leaves a primary secret key stub ('#').
 	if _, e = safe.Command(secret, "gpg", "--batch", "--no-options", "--homedir", h, "--import"); e != nil {
 		return fmt.Errorf("import CI signing subkey: %w", e)
 	}
@@ -166,6 +165,7 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		f := strings.Split(line, ":")
+		// gpg --export-secret-subkeys leaves a primary secret key stub marked '#'.
 		if len(f) >= 15 && f[0] == "sec" && f[14] != "#" {
 			return errors.New("CI must not contain a primary private key")
 		}
@@ -176,7 +176,6 @@ func Sign(root string, key, secret, passphrase []byte, primary, sub string) erro
 			return errors.New("signature output already exists")
 		}
 	}
-	// Attempt signing directly; gpg reports key unavailability as an error.
 	for _, spec := range []struct{ name, mode string }{{"Release.gpg", "--detach-sign"}, {"InRelease", "--clearsign"}} {
 		output := filepath.Join(h, spec.name)
 		args := []string{"--batch", "--no-options", "--homedir", h, "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--local-user", sub + "!", "--digest-algo", "SHA256", "--output", output, spec.mode, filepath.Join(base, "Release")}
