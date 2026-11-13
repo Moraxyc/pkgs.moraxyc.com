@@ -61,6 +61,21 @@ func syntheticKey(t *testing.T) ([]byte, []byte, string, string) {
 	must(t, e)
 	return key, secret, primary, sub
 }
+func TestPublicKeyringRejectsArmor(t *testing.T) {
+	key, _, primary, sub := syntheticKey(t)
+	must(t, signing.Public(key, primary, sub))
+	h := t.TempDir()
+	must(t, os.Chmod(h, 0700))
+	armored, err := safe.Command(key, "gpg", "--batch", "--no-options", "--homedir", h, "--import-options", "import-export", "--armor", "--import")
+	must(t, err)
+	if !bytes.HasPrefix(armored, []byte("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
+		t.Fatal("expected an armored public key export")
+	}
+	if err := signing.Public(armored, primary, sub); err == nil || !strings.Contains(err.Error(), "binary OpenPGP") {
+		t.Fatalf("expected a binary keyring format error, got %v", err)
+	}
+}
+
 func treeBytes(t *testing.T, root string) map[string]string {
 	t.Helper()
 	out := map[string]string{}

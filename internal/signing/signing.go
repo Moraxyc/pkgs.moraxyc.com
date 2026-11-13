@@ -35,6 +35,10 @@ func PublicAt(key []byte, primary, sub string, epoch int64) error {
 	if !fingerprint.MatchString(primary) || !fingerprint.MatchString(sub) || primary == sub {
 		return errors.New("explicit primary and signing subkey fingerprints required")
 	}
+	// gpg accepts armor here, but gpgv --keyring requires a binary keyring.
+	if bytes.HasPrefix(bytes.TrimSpace(key), []byte("-----BEGIN PGP")) {
+		return errors.New("public keyring must use binary OpenPGP (.gpg), not ASCII armor")
+	}
 	h, e := home()
 	if e != nil {
 		return e

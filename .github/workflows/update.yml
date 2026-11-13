@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,17 +27,28 @@ jobs:
         run: |
           nix flake check
           nix develop -c bash -euo pipefail -c 'just check && just integration && just build'
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: Commit and push updated dependencies
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          set -euo pipefail
           git add flake.lock nix/vendor-hash
           if git diff --cached --quiet; then
             echo 'Dependencies already up to date.'
             exit 0
           fi
+          bot_name="${APP_SLUG}[bot]"
+          bot_id="$(gh api "users/$bot_name" --jq .id)"
+          git config user.name "$bot_name"
+          git config user.email "${bot_id}+${bot_name}@users.noreply.github.com"
           git commit -F - <<'EOF'
           chore(deps): update Nix inputs and Go module hashes
 
@@ -45,4 +56,5 @@ jobs:
 
           Validated with flake checks, just check, just integration, and just build.
           EOF
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
+          gh auth setup-git
+          git push origin "HEAD:${GITHUB_REF_NAME}"
