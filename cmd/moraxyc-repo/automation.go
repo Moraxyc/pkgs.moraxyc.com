@@ -144,17 +144,7 @@ func executeProjectCI(operation string, opts projectCIOptions) error {
 		return errors.New("invalid project release identity")
 	}
 	if operation == "notify" {
-		payload, err := json.Marshal(map[string]string{"project": opts.project, "repository": opts.repository, "release_tag": opts.tag, "manifest_asset": "moraxyc-manifest.json"})
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-		defer cancel()
-		client, err := projectCIClient().API()
-		if err != nil {
-			return err
-		}
-		return client.Dispatch(ctx, "moraxyc", "pkgs.moraxyc.com", "project-release-published", payload)
+		return dispatchNotification(opts)
 	}
 	if operation != "publish" && operation != "verify" {
 		return errors.New("unknown project-ci operation")
@@ -162,6 +152,24 @@ func executeProjectCI(operation string, opts projectCIOptions) error {
 	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(opts.commit) {
 		return errors.New("an exact tested commit is required")
 	}
+	return publishOrVerify(operation, opts)
+}
+
+func dispatchNotification(opts projectCIOptions) error {
+	payload, err := json.Marshal(map[string]string{"project": opts.project, "repository": opts.repository, "release_tag": opts.tag, "manifest_asset": "moraxyc-manifest.json"})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	client, err := projectCIClient().API()
+	if err != nil {
+		return err
+	}
+	return client.Dispatch(ctx, "moraxyc", "pkgs.moraxyc.com", "project-release-published", payload)
+}
+
+func publishOrVerify(operation string, opts projectCIOptions) error {
 	validate := func(directory string) error {
 		return artifact.Verify(directory, opts.project, opts.tag, strings.Split(opts.architectures, ","))
 	}
@@ -179,38 +187,60 @@ func executeProjectCI(operation string, opts projectCIOptions) error {
 		return err
 	}
 	owner, repository, _ := strings.Cut(opts.repository, "/")
-	actual, err := client.Commit(ctx, owner, repository, opts.tag)
+
+	if err = checkCommit(ctx, client, owner, repository, opts); err != nil {
+		return err
+	}
+	current, err := ensureRelease(ctx, client, owner, repository, opts, operation)
+	if err != nil {
+		return err
+	}
+	if operation == "publish" {
+		if err = uploadAssets(ctx, client, owner, repository, current, opts, expected); err != nil {
+			return err
+		}
+	}
+	if err = roundTripVerify(ctx, client, owner, repository, current, opts, expected, validate); err != nil {
+		return err
+	}
+	if current.Draft {
+		if err = finalizeRelease(ctx, client, owner, repository, current, opts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkCommit(ctx context.Context, client *githubclient.API, owner, repo string, opts projectCIOptions) error {
+	actual, err := client.Commit(ctx, owner, repo, opts.tag)
 	if err != nil {
 		return err
 	}
 	if actual != opts.commit {
 		return errors.New("release tag does not point to tested commit")
 	}
-	release := func() (*githubclient.Release, error) {
-		current, err := client.Release(ctx, owner, repository, opts.tag)
-		if err != nil || current == nil {
-			return current, err
-		}
+	return nil
+}
+
+func ensureRelease(ctx context.Context, client *githubclient.API, owner, repo string, opts projectCIOptions, operation string) (*githubclient.Release, error) {
+	current, err := client.Release(ctx, owner, repo, opts.tag)
+	if err != nil {
+		return nil, err
+	}
+	if current != nil {
 		if current.Draft && operation != "publish" || current.Tag != opts.tag || current.Prerelease != opts.prerelease {
 			return nil, errors.New("release identity or state mismatch")
 		}
 		return current, nil
 	}
-	current, err := release()
-	if err != nil {
-		return err
+	if operation != "publish" {
+		return nil, errors.New("Release is missing")
 	}
-	if current == nil {
-		if operation != "publish" {
-			return errors.New("Release is missing")
-		}
-		current, err = client.CreateRelease(ctx, owner, repository, opts.tag, opts.prerelease)
-		if err != nil {
-			return err
-		}
-	}
+	return client.CreateRelease(ctx, owner, repo, opts.tag, opts.prerelease)
+}
 
-	assets, err := client.ListReleaseAssets(ctx, owner, repository, current.ID)
+func uploadAssets(ctx context.Context, client *githubclient.API, owner, repo string, current *githubclient.Release, opts projectCIOptions, expected map[string][32]byte) error {
+	assets, err := client.ListReleaseAssets(ctx, owner, repo, current.ID)
 	if err != nil {
 		return err
 	}
@@ -219,43 +249,44 @@ func executeProjectCI(operation string, opts projectCIOptions) error {
 		if _, ok := expected[asset.Name]; !ok || seen[asset.Name].ID != 0 {
 			return errors.New("Release asset set differs from tested artifact set")
 		}
-		if current.Draft && operation == "publish" && asset.State == "starter" {
-			if err = client.DeleteFailedAsset(ctx, owner, repository, asset.ID); err != nil {
+		if asset.State == "starter" {
+			if err = client.DeleteFailedAsset(ctx, owner, repo, asset.ID); err != nil {
 				return err
 			}
 			continue
 		}
 		seen[asset.Name] = asset
 	}
-	if current.Draft && operation == "publish" {
-		names := make([]string, 0, len(expected))
-		for name := range expected {
-			if _, ok := seen[name]; !ok {
-				names = append(names, name)
-			}
+	names := make([]string, 0, len(expected))
+	for name := range expected {
+		if _, ok := seen[name]; !ok {
+			names = append(names, name)
 		}
-		sort.Strings(names)
-		for _, name := range names {
-			if err = client.UploadReleaseAsset(ctx, owner, repository, current.ID, filepath.Join(opts.directory, name)); err != nil {
-				return err
-			}
-		}
-		assets, err = client.ListReleaseAssets(ctx, owner, repository, current.ID)
-		if err != nil {
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err = client.UploadReleaseAsset(ctx, owner, repo, current.ID, filepath.Join(opts.directory, name)); err != nil {
 			return err
 		}
-		seen = map[string]githubclient.ReleaseAsset{}
-		for _, asset := range assets {
-			if _, ok := expected[asset.Name]; !ok || seen[asset.Name].ID != 0 {
-				return errors.New("Release asset set differs from tested artifact set")
-			}
-			seen[asset.Name] = asset
+	}
+	return nil
+}
+
+func roundTripVerify(ctx context.Context, client *githubclient.API, owner, repo string, current *githubclient.Release, opts projectCIOptions, expected map[string][32]byte, validate func(string) error) error {
+	assets, err := client.ListReleaseAssets(ctx, owner, repo, current.ID)
+	if err != nil {
+		return err
+	}
+	seen := map[string]githubclient.ReleaseAsset{}
+	for _, asset := range assets {
+		if _, ok := expected[asset.Name]; !ok || seen[asset.Name].ID != 0 {
+			return errors.New("Release asset set differs from tested artifact set")
 		}
+		seen[asset.Name] = asset
 	}
 	if len(seen) != len(expected) {
 		return errors.New("Release asset set differs from tested artifact set")
 	}
-
 	target, err := os.MkdirTemp("", "moraxyc-release-")
 	if err != nil {
 		return err
@@ -268,7 +299,7 @@ func executeProjectCI(operation string, opts projectCIOptions) error {
 	sort.Strings(names)
 	for _, name := range names {
 		asset := seen[name]
-		if err = client.DownloadReleaseAsset(ctx, owner, repository, asset.ID, filepath.Join(target, name), asset.Size); err != nil {
+		if err = client.DownloadReleaseAsset(ctx, owner, repo, asset.ID, filepath.Join(target, name), asset.Size); err != nil {
 			return err
 		}
 	}
@@ -282,26 +313,25 @@ func executeProjectCI(operation string, opts projectCIOptions) error {
 	if !reflect.DeepEqual(actualHashes, expected) {
 		return errors.New("Release bytes differ from tested artifacts")
 	}
-	if current.Draft {
-		actual, err = client.Commit(ctx, owner, repository, opts.tag)
-		if err != nil {
-			return err
-		}
-		if actual != opts.commit {
-			return errors.New("release tag does not point to tested commit")
-		}
-		if err = client.PublishRelease(ctx, owner, repository, current.ID); err != nil {
-			return err
-		}
-		published, err := release()
-		if err != nil {
-			return err
-		}
-		if published == nil || published.Draft {
-			return errors.New("Release publication was not confirmed")
-		}
-	}
+	return nil
+}
 
+func finalizeRelease(ctx context.Context, client *githubclient.API, owner, repo string, current *githubclient.Release, opts projectCIOptions) error {
+	// Re-check commit before publishing to guard against tag moves between
+	// the initial check and the publish step.
+	if err := checkCommit(ctx, client, owner, repo, opts); err != nil {
+		return err
+	}
+	if err := client.PublishRelease(ctx, owner, repo, current.ID); err != nil {
+		return err
+	}
+	published, err := client.Release(ctx, owner, repo, opts.tag)
+	if err != nil {
+		return err
+	}
+	if published == nil || published.Draft {
+		return errors.New("Release publication was not confirmed")
+	}
 	return nil
 }
 
