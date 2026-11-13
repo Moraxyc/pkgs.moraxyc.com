@@ -59,6 +59,7 @@ jobs:
             .build/source-commit
             .build/publication.nar
             .build/closure-paths.txt
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
   publish:

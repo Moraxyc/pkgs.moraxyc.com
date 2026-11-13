@@ -117,5 +117,6 @@ jobs:
             .build/audit.txt
             .build/deployment.json
             .build/pages-deployment.jsonl
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
