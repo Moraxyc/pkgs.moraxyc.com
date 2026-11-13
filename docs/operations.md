@@ -14,7 +14,7 @@
 发布流程分为三个 workflow：
 
 - `update-publication.yml` 收集并校验快照，只更新 context 中的 epoch，提交两个输入文件后把确切 commit 传给 Build。它每六小时、手动触发或收到 `project-release-published` 事件时运行；不把 dispatch payload 当作仓库数据。公钥指纹仍由人工评审维护，`update.yml` 单独负责依赖更新。
-- `build.yml` 检出指定 commit，通过 `nix develop .#build -c nix build .#site` 在锁定的 Nix/go2nix 环境中构建，并导出运行时闭包和源 commit。产物名包含 run ID 和构建 attempt。手动 Build 使用默认分支的选定提交，`publish` 默认关闭；Update 调用时开启发布。
+- `build.yml` 检出指定 commit，通过 `nix build .#site` 在锁定的 Nix 环境中构建，并导出运行时闭包和源 commit。产物名包含 run ID 和构建 attempt。手动 Build 使用默认分支的选定提交，`publish` 默认关闭；Update 调用时开启发布。
 - `publish.yml` 接收成功 Build 的确切 commit、store 路径和产物名。它导入闭包，不再求值或构建项目；核对产物中的 snapshot/context 与该 commit 一致，只复制 `public/` 到可写目录，签名、用 APT 校验后上传。Pages 只接收 `public/`，其余元数据和工具留在 workflow 产物中。
 
 Update 使用 Nix 的 publication 环境；Build 的产物导出和 Publish 的签名、校验、上传都使用 site 中的 `tools`。不单独执行发布工具包的构建命令，也不依赖 runner 预装的业务工具。Actions 和初始 Nix 安装属于启动环境。

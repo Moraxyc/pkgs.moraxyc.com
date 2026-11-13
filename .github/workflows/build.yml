@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
       - name: Build unsigned publication
-        run: nix develop .#build -c nix build .#site
+        run: nix build .#site
       - name: Export publication and runtime closure
         id: bundle
         shell: result/tools/bin/bash --noprofile --norc -euo pipefail {0}

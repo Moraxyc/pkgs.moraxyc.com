@@ -2,13 +2,6 @@
   perSystem =
     { config, pkgs, ... }:
     {
-      devShells.build = pkgs.mkShell {
-        packages = [
-          config.packages.publication-nix
-          pkgs.bash
-          pkgs.coreutils
-        ];
-      };
       devShells.publication = pkgs.mkShell {
         packages = [ config.packages.publication-tools ];
         PUBLICATION_TOOLS = config.packages.publication-tools;
@@ -27,9 +20,6 @@
           wrangler
           actionlint
           nixfmt
-          config.packages.go2nix
-          config.packages.nix-go2nix
-          config.packages.publication-nix
         ];
         shellHook = ''
           export GOMODCACHE="$PWD/.build/go-modules"

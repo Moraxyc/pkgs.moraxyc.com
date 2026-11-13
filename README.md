@@ -17,19 +17,24 @@ nix develop -c bash -euo pipefail -c \
 
 ## 开发环境
 
-`nix develop` 使用 flake-parts 的 `dev` 分区。`flake.lock` 固定 Nix 输入和工具链，`go.mod`、`go.sum`、`go2nix.toml` 固定 Go 依赖，构建缓存位于 `.build/`。
-
-`go2nix` 为每个包生成独立 derivation，构建 CLI 并运行 Go 测试。求值插件需要匹配的 Nix ABI，请使用锁定版本 wrapper：
+`nix develop` 使用 flake-parts 的 `dev` 分区。`flake.lock` 固定 Nix 输入和工具链，`go.mod`、`go.sum` 固定 Go 依赖。`buildGoModule` 用 `nix/vendor-hash` 校验生成的 vendor 内容，无需提交 vendor 目录或加载求值插件。
 
 ```sh
-nix run .#nix-go2nix -- build
-nix run .#nix-go2nix -- flake check
+nix build
+nix flake check
 nix fmt
 ```
 
-`nix develop` 提供 `nix-go2nix`；`just build` 用它输出 `.build/moraxyc-repo`。支持 `x86_64-linux` 和 `aarch64-linux`。修改 Go 依赖后运行 `nix develop -c go2nix generate`，一起提交 `go.mod`、`go.sum`、`go2nix.toml`；`go2nix check` 检查锁定文件漂移。
+`just build` 输出 `.build/moraxyc-repo`。支持 `x86_64-linux` 和 `aarch64-linux`。修改 Go 依赖后，用锁定的 Go 工具链更新哈希并验证构建：
 
-`nix develop -c just update` 刷新 Nix 输入并重新生成模块哈希。每周的 **Update dependencies** 工作流也执行这些操作，运行 `flake check` 和 `check`/`integration`/`build` 流程，再把 `flake.lock`、`go2nix.toml` 提交到默认分支。它不升级 `go.mod` 中的版本，也不自动合并；推送前运行这些校验，推送会触发 Check 工作流。默认分支若要求 PR 或必需状态检查，直接推送会被拒绝。
+```sh
+nix develop -c just vendor-hash
+nix build .#moraxyc-repo
+```
+
+一起提交 `go.mod`、`go.sum` 和 `nix/vendor-hash`。只修改应用代码或版本号而不改变 vendor 内容时，哈希不变。
+
+`nix develop -c just update` 刷新 Nix 输入并重算 vendor 哈希。每周的 **Update dependencies** 工作流执行同样操作，运行 `nix flake check` 和 `check`/`integration`/`build` 流程，再提交 `flake.lock`、`nix/vendor-hash`。它不升级 `go.mod` 中的版本。默认分支若要求 PR 或必需状态检查，直接推送会被拒绝。
 
 ## 命令
 

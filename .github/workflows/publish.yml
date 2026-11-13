@@ -82,7 +82,7 @@ jobs:
             jq -r '"epoch=\(.epoch)\nprimary_fingerprint=\(.primary_fingerprint)\nsigning_fingerprint=\(.signing_fingerprint)"' .build/publication.json
             echo "site=$SITE_STORE_PATH"
             echo "tools=$(readlink -f "$SITE_STORE_PATH/tools")"
-            sha256sum flake.lock go2nix.toml .build/snapshot.json .build/publication.json .build/public/deb/dists/stable/Release
+            sha256sum flake.lock nix/vendor-hash .build/snapshot.json .build/publication.json .build/public/deb/dists/stable/Release
           } > .build/audit.txt
           cat .build/audit.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Recheck source before deployment

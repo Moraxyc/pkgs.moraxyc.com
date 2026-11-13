@@ -7,10 +7,6 @@
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
-    go2nix = {
-      url = "github:numtide/go2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =

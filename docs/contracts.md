@@ -34,14 +34,14 @@
 
 ## 重放已保存的输入
 
-检出记录的源提交及两个锁文件、公钥环。Update 已将发布输入提交到 Git，无需恢复其他文件。导入 unsigned artifact 的 Nix 闭包后，可用 site 产物中的 `snapshot.json` 和 `publication.json` 审计输入。然后重建：
+检出记录的源提交、`flake.lock`、`nix/vendor-hash` 和公钥环。Update 已将发布输入提交到 Git，无需恢复其他文件。导入 unsigned artifact 的 Nix 闭包后，可用 site 产物中的 `snapshot.json` 和 `publication.json` 审计输入。然后重建：
 
 ```sh
 nix develop -c just site
 # Unsigned public tree: .build/site/public
 ```
 
-site 产物包含未签名站点 `public/`、输入文件 `snapshot.json` 和 `publication.json`，以及指向发布工具的 `tools`。只部署 `public/`。`just site` 使用锁定的 Nix/go2nix 求值器；CI 配置好该求值器后执行 `nix build .#site`。
+site 产物包含未签名站点 `public/`、输入文件 `snapshot.json` 和 `publication.json`，以及指向发布工具的 `tools`。只部署 `public/`。`just site` 和 CI 均通过 `nix build .#site` 使用锁定工具链。
 
 `publication/context.json` 固定 `epoch`、`primary_fingerprint` 和 `signing_fingerprint`。`nix/site.nix` 提供 `packages.site`，使用 Git 跟踪的发布输入、锁定工具链、UTC 和 C locale 渲染，并按记录的 epoch 检查公钥有效期。求值为纯模式，构建不访问网络或签名凭据。初始参数尚未配置；构建生产 site 前需填写正数 epoch、经评审的指纹并提供公钥环。收集 GitHub 数据属于外部输入更新，重放必须使用已保存的快照。
 

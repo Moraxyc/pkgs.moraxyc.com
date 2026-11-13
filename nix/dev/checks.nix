@@ -11,12 +11,10 @@
                 go
                 actionlint
                 nixfmt
-                config.packages.go2nix
               ];
             }
             ''
               cd ${../..}
-              go2nix check
               test -z "$(gofmt -l cmd internal schemas tests)"
               nixfmt --check flake.nix nix/*.nix nix/dev/*.nix
               actionlint .github/workflows/*.yml examples/project/.github/workflows/*.yml

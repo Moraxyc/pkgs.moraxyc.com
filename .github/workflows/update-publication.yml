@@ -25,7 +25,7 @@ jobs:
                   persist-credentials: false
             - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
             - name: Enter locked publication environment
-              run: nix run .#nix-go2nix -- develop .#publication -c bash -euo pipefail -c "echo \"\$PUBLICATION_TOOLS/bin\" >> \"\$GITHUB_PATH\""
+              run: nix develop .#publication -c bash -euo pipefail -c "echo \"\$PUBLICATION_TOOLS/bin\" >> \"\$GITHUB_PATH\""
 
             - name: Refresh and validate publication inputs
               env:

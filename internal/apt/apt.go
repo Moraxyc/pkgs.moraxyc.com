@@ -91,6 +91,7 @@ func Release(c config.Config, root string, epoch int64) ([]byte, error) {
 	b = append([]byte("Valid-Until: "+until.Format(time.RFC1123Z)+"\n"), b...)
 	return b, nil
 }
+
 // PublicFiles constructs the complete expected set of files for the public
 // tree from the given inputs. Both Render and verify.Tree use this function so
 // that the definition of "what belongs in the public tree" lives in one place.
