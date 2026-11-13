@@ -377,9 +377,18 @@ func central(args []string) error {
 func executeCentral(operation string) error {
 	switch operation {
 	case "deploy":
+		if !regexp.MustCompile(`^[0-9a-fA-F]{32}$`).MatchString(os.Getenv("CLOUDFLARE_ACCOUNT_ID")) {
+			return errors.New("CLOUDFLARE_ACCOUNT_ID must be a 32-character hexadecimal account ID")
+		}
 		project, branch := os.Getenv("PAGES_PROJECT"), os.Getenv("PAGES_BRANCH")
-		if project == "" || branch == "" {
-			return errors.New("Pages project and production branch required")
+		if !regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`).MatchString(project) {
+			return errors.New("PAGES_PROJECT must be a Pages project name (lowercase letters, digits and hyphens), not a domain or URL")
+		}
+		if strings.TrimSpace(branch) == "" {
+			return errors.New("PAGES_BRANCH is required")
+		}
+		if strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN")) == "" {
+			return errors.New("CLOUDFLARE_API_TOKEN is required")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()

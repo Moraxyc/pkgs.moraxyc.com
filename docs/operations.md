@@ -7,7 +7,7 @@
 1. 创建 Cloudflare Pages Direct Upload 项目，将生产分支设为本仓库默认分支，并以 HTTPS 绑定 `pkgs.moraxyc.com`。
 2. 建立离线主密钥和 CI 签名子密钥；审核两个公钥指纹后，只提交二进制 OpenPGP 公钥环 `keys/moraxyc-archive-keyring.gpg`（`gpg --export`，不加 `--armor`）。已有 ASCII-armored 公钥须先用 `gpg --dearmor` 转换；仅改扩展名不能使其用于 `gpgv --keyring`。
 3. 用必需检查项和 CODEOWNERS 保护默认分支，将 `pages-production` 限制到该分支，并配置生产发布审批人。
-4. 在 `publication/context.json` 中填写经评审的 `primary_fingerprint` 和 `signing_fingerprint`，使用大写 40 位指纹。设置仓库变量 `CLOUDFLARE_ACCOUNT_ID` 和 `PAGES_PROJECT`；默认分支规则需允许发布更新器推送输入提交，且更新器不强制推送。
+4. 在 `publication/context.json` 中填写经评审的 `primary_fingerprint` 和 `signing_fingerprint`，使用大写 40 位指纹。在 Actions 的 **Variables** 中设置仓库变量 `CLOUDFLARE_ACCOUNT_ID` 和 `PAGES_PROJECT`，不要放在 Secrets 中。前者填写项目所属账户的 32 位十六进制 Account ID，后者填写 Pages 项目名，不是自定义域名、`*.pages.dev` 地址或项目 UUID。两者均不含引号或空白。默认分支规则需允许发布更新器推送输入提交，且更新器不强制推送。
 5. 在 `pages-production` 中以 `APT_SIGNING_SUBKEY` 添加经标准 Base64 编码的**秘密子密钥导出**（`gpg --export-secret-subkeys` 的二进制或 ASCII-armored 输出，附不含主私钥的密钥存根）。签名命令在导入前解码。无密码的子密钥无需设置 `APT_SIGNING_PASSPHRASE`；有密码时才设置。`CLOUDFLARE_API_TOKEN` 只放在该环境中，并限制为目标账户的 Pages 部署权限。
 6. 启用一个经过评审的项目，手动发布一次，并记录自定义域名检查和客户端安装结果。
 
@@ -72,6 +72,7 @@ sudo apt-get update
 | 清单或资产缺失、非法 | 修复所属项目的 Release 或策略；不要静默跳过某个失败的项目。 |
 | 重复的包三元组或 pool 路径 | 解决冲突的源记录，然后重建所有项目。 |
 | 签名或指纹不匹配 | 在部署前停止；修正经评审的 CI/密钥环配置，并重新渲染到新目录。 |
+| Cloudflare API `7003`，无法路由到 Pages 项目 | 核对 Actions Variables 中的 Account ID 和 Pages 项目名，并确认项目属于该账户。检查 `pages-production` 的同名环境变量是否覆盖了仓库变量。API token 须有该账户的 Cloudflare Pages Edit 权限。 |
 | 部署 API 失败 | 记录失败，并在重试前检查平台的部署状态。 |
 | 自定义域名冒烟失败 | 新部署可能已经在承载流量。检查缓存/DNS 和签名结果，必要时回滚到已记录的已知良好部署。 |
 
