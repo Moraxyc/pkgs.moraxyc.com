@@ -4,6 +4,7 @@
 
 | 项目 | 上游仓库 |
 | --- | --- |
+| `fetchrix` | [moraxyc/fetchrix](https://github.com/moraxyc/fetchrix) |
 | `whois42d-ng` | [Moraxyc/whois42d-ng](https://github.com/Moraxyc/whois42d-ng) |
 
 启用项目前先阅读[项目接入](../docs/project-onboarding.md)。

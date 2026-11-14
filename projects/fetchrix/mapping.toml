@@ -1,0 +1,5 @@
+[[rules]]
+package = "fetchrix"
+architecture = "*"
+asset = "fetchrix_*.deb"
+pool = "pool/{project}/{release_tag}/{filename}"
