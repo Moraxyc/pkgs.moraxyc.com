@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -58,16 +59,23 @@ func TestRemoteWaitsForConvergenceAndHonorsDeadline(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if err := remote(ctx, server.URL, root, c, nil, nil, 1, time.Millisecond); err != nil {
+	var progress bytes.Buffer
+	if err := remote(ctx, server.URL, root, c, nil, nil, 1, time.Millisecond, &progress); err != nil {
 		t.Fatal(err)
 	}
 	if attempts.Load() < 3 {
 		t.Fatal("accepted stale or unavailable metadata")
 	}
+	for _, want := range []string{"attempt=1 duration=", "attempt=2 duration=", "attempt=3 duration=", "elapsed=", "deb/dists/stable/InRelease (status=200)", "deb/dists/stable/InRelease (status=503)", "error=<nil>"} {
+		if !strings.Contains(progress.String(), want) {
+			t.Fatalf("missing diagnostic %q in %s", want, progress.String())
+		}
+	}
+	progress.Reset()
 	permanent.Store(true)
 	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer cancel()
-	if err := remote(ctx, server.URL, root, c, nil, nil, 1, time.Millisecond); !errors.Is(err, context.DeadlineExceeded) {
+	if err := remote(ctx, server.URL, root, c, nil, nil, 1, time.Millisecond, &progress); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("persistent mismatch: %v", err)
 	}
 }

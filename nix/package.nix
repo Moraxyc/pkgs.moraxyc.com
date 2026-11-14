@@ -26,7 +26,18 @@
         moraxyc-repo = pkgs.buildGoModule {
           pname = "moraxyc-repo";
           version = "0.1.0";
-          src = ../.;
+          src = pkgs.lib.fileset.toSource {
+            root = ../.;
+            fileset = pkgs.lib.fileset.unions [
+              ../go.mod
+              ../go.sum
+              ../LICENSE
+              ../cmd
+              ../internal
+              ../schemas
+              ../tests
+            ];
+          };
           vendorHash = pkgs.lib.fileContents ./vendor-hash;
           goSum = ../go.sum;
           subPackages = [ "cmd/moraxyc-repo" ];

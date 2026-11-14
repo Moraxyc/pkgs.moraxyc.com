@@ -20,10 +20,10 @@ import (
 
 // Remote checks metadata bytes and redirect headers without following pool URLs.
 func Remote(ctx context.Context, baseURL, root string, c config.Config, records []snapshot.Record, history map[string]snapshot.HistoricalIndex, epoch int64) error {
-	return remote(ctx, baseURL, root, c, records, history, epoch, 5*time.Second)
+	return remote(ctx, baseURL, root, c, records, history, epoch, 5*time.Second, os.Stderr)
 }
 
-func remote(ctx context.Context, baseURL, root string, c config.Config, records []snapshot.Record, history map[string]snapshot.HistoricalIndex, epoch int64, interval time.Duration) error {
+func remote(ctx context.Context, baseURL, root string, c config.Config, records []snapshot.Record, history map[string]snapshot.HistoricalIndex, epoch int64, interval time.Duration, progress io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, 7*time.Minute)
 	defer cancel()
 	client := &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -52,7 +52,7 @@ func remote(ctx context.Context, baseURL, root string, c config.Config, records 
 		}
 		resp, e := client.Do(req)
 		if e != nil {
-			return nil, errors.New("smoke request failed")
+			return nil, fmt.Errorf("smoke request failed: %s", path)
 		}
 		return resp, nil
 	}
@@ -66,7 +66,7 @@ func remote(ctx context.Context, baseURL, root string, c config.Config, records 
 			b, e := io.ReadAll(io.LimitReader(resp.Body, int64(len(expected))+1))
 			resp.Body.Close()
 			if e != nil || resp.StatusCode != 200 || !bytes.Equal(b, expected) {
-				return errors.New("deployed metadata mismatch: " + name)
+				return fmt.Errorf("deployed metadata mismatch: %s (status=%d)", name, resp.StatusCode)
 			}
 		}
 		if len(records) > 0 {
@@ -90,8 +90,11 @@ func remote(ctx context.Context, baseURL, root string, c config.Config, records 
 		}
 		return nil
 	}
-	for {
+	started := time.Now()
+	for attempt := 1; ; attempt++ {
+		attemptStarted := time.Now()
 		err := check()
+		fmt.Fprintf(progress, "remote verification attempt=%d duration=%s elapsed=%s error=%v\n", attempt, time.Since(attemptStarted).Round(time.Millisecond), time.Since(started).Round(time.Millisecond), err)
 		if err == nil {
 			return nil
 		}
