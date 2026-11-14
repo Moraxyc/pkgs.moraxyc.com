@@ -13,11 +13,14 @@ jobs:
     update:
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         runs-on: ubuntu-24.04
-        timeout-minutes: 30
+        timeout-minutes: 45
         permissions:
             contents: read
         outputs:
             commit: ${{ steps.save.outputs.commit }}
+            site: ${{ steps.bundle.outputs.site }}
+            artifact: ${{ steps.bundle.outputs.artifact }}
+            publish: ${{ steps.refresh.outputs.publish }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
@@ -29,19 +32,20 @@ jobs:
               with:
                 primary-key: nix-publication-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('flake.nix', 'nix/**', 'go.mod', 'go.sum', 'LICENSE', 'cmd/**', 'internal/**', 'schemas/**', 'tests/**') }}
                 restore-prefixes-first-match: nix-publication-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock') }}-
-                gc-max-store-size: 1G
+                gc-max-store-size: 3G
             - name: Prepare locked publication tools
               run: |
                   mkdir -p .build
                   nix build .#publication-tools --out-link .build/publication-tools
                   echo "$PWD/.build/publication-tools/bin" >> "$GITHUB_PATH"
-
             - name: Refresh and validate publication inputs
+              id: refresh
               env:
                   GITHUB_TOKEN: ${{ github.token }}
               run: moraxyc-repo update-publication
             - name: Generate GitHub App token
               id: app-token
+              if: steps.refresh.outputs.publish != 'false'
               uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
               with:
                   client-id: ${{ secrets.APP_ID }}
@@ -49,6 +53,7 @@ jobs:
                   permission-contents: write
             - name: Save publication inputs
               id: save
+              if: steps.refresh.outputs.publish != 'false'
               env:
                   GH_TOKEN: ${{ steps.app-token.outputs.token }}
                   APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
@@ -62,16 +67,48 @@ jobs:
                   git add publication/snapshot.json publication/context.json
                   if ! git diff --cached --quiet; then
                     git commit -m 'chore(publication): refresh snapshot and epoch'
+                    gh auth setup-git
+                    git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
                   fi
-                  gh auth setup-git
-                  git push origin "HEAD:refs/heads/$DEFAULT_BRANCH"
                   echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-    build:
+            - name: Build unsigned publication
+              if: steps.refresh.outputs.publish != 'false'
+              run: nix build .#site
+            - name: Export unsigned publication
+              id: bundle
+              if: steps.refresh.outputs.publish != 'false'
+              shell: bash --noprofile --norc -euo pipefail {0}
+              run: |
+                  site=$(readlink -f result)
+                  artifact="unsigned-repository-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+                  {
+                    echo "site=$site"
+                    echo "artifact=$artifact"
+                  } >> "$GITHUB_OUTPUT"
+                  printf '%s\n' "$(git rev-parse HEAD)" > .build/source-commit
+                  cp "$site/snapshot.json" .build/snapshot.json
+                  cp "$site/publication.json" .build/publication.json
+                  cp -R "$site/public" .build/public
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              if: steps.refresh.outputs.publish != 'false'
+              with:
+                  name: ${{ steps.bundle.outputs.artifact }}
+                  path: |
+                      .build/source-commit
+                      .build/snapshot.json
+                      .build/publication.json
+                      .build/public/
+                  include-hidden-files: true
+                  if-no-files-found: error
+                  retention-days: 30
+    deploy:
         needs: update
+        if: needs.update.outputs.publish != 'false'
         permissions:
             contents: read
-        uses: ./.github/workflows/build.yml
+        uses: ./.github/workflows/publish.yml
         secrets: inherit
         with:
             source_commit: ${{ needs.update.outputs.commit }}
-            publish: true
+            site: ${{ needs.update.outputs.site }}
+            artifact: ${{ needs.update.outputs.artifact }}

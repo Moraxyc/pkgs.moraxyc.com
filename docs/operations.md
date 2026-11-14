@@ -21,11 +21,13 @@
 
 ## 发布
 
-`update-publication.yml` 每六小时、手动或收到 `project-release-published` 时刷新快照和 epoch，提交后调用 `build.yml` 构建，再由 `publish.yml` 签名、运行 APT 检查并上传。
+`update-publication.yml` 每六小时、手动或收到 `project-release-published` 时收集快照，并在同一个 job 内构建，再由 `publish.yml` 签名、运行 APT 检查并上传。合并这两步只是为了少付一次 runner 与缓存还原开销；`publish.yml` 仍独立成 job，因为它持有 `pages-production` 环境与签名子密钥。
+
+收集结果与已提交快照一致（忽略 `completed_at` 与 `expires_at`）、已发布 Release 剩余有效期超过两天、且线上 `Release` 的 `Date` 等于已提交 epoch 时，不写新 epoch，构建和部署整步跳过。线上 `Date` 不匹配会强制重建，所以构建或部署失败不会被跳过掩盖；有效期逼近两天时也会强制刷新 epoch。单次跳过只消耗收集时间，不再产生空提交。
 
 unsigned artifact 只包含未签名 `public/`、快照、发布参数和源 commit，不包含 Nix 运行时闭包。Publish 从同一提交单独构建 `publication-tools`，不重新渲染站点。
 
-手动 Build 默认不发布，需开启 `publish`。Publish 失败可用 **Re-run failed jobs** 复用构建产物。元数据过期后重新运行 Update，单独重签不会延长有效期。
+手动 Build 默认不发布，需开启 `publish`。Publish 失败可用 **Re-run failed jobs** 复用构建产物；线上 epoch 落后于提交时，下一次 Update 会重新构建并部署。元数据过期后重新运行 Update，单独重签不会延长有效期。
 
 <a id="key-lifecycle"></a>
 

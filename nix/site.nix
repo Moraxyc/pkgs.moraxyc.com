@@ -9,7 +9,11 @@
       packages.site =
         pkgs.runCommand "moraxyc-unsigned-site"
           {
-            nativeBuildInputs = [ config.packages.publication-tools ];
+            nativeBuildInputs = [
+              config.packages.moraxyc-repo
+              pkgs.apt
+              pkgs.gnupg
+            ];
             SOURCE_DATE_EPOCH = toString context.epoch;
             LC_ALL = "C";
             TZ = "UTC";

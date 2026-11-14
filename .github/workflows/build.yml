@@ -6,14 +6,6 @@ on:
         description: Sign and publish after building
         type: boolean
         default: false
-  workflow_call:
-    inputs:
-      source_commit:
-        required: true
-        type: string
-      publish:
-        type: boolean
-        default: false
 permissions: {}
 jobs:
   build:
@@ -29,7 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.source_commit || github.sha }}
           persist-credentials: false
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
       - name: Restore publication Nix cache

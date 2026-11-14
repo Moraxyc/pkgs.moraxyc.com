@@ -23,6 +23,7 @@ import (
 	"pkgs.moraxyc.com/internal/projects"
 	"pkgs.moraxyc.com/internal/safe"
 	"pkgs.moraxyc.com/internal/snapshot"
+	"pkgs.moraxyc.com/internal/verify"
 )
 
 func artifactHashes(dir string) (map[string][32]byte, error) {
@@ -462,7 +463,6 @@ func executeUpdatePublication() error {
 	if err = run([]string{"validate-snapshot", "--snapshot", snap}); err != nil {
 		return err
 	}
-	epoch := time.Now().Unix()
 	previous, err := snapshot.Load("publication/snapshot.json")
 	if err != nil {
 		return err
@@ -483,6 +483,28 @@ func executeUpdatePublication() error {
 	if err != nil {
 		return err
 	}
+	var published struct {
+		Epoch int64 `json:"epoch"`
+	}
+	if err = json.Unmarshal(publication["epoch"], &published.Epoch); err != nil {
+		return errors.New("invalid publication epoch")
+	}
+	publish := published.Epoch <= 0
+	now := time.Now().Unix()
+	if !publish {
+		collected.IndexHistory, err = apt.RetainIndexes(cfg, records, previous.IndexHistory, published.Epoch)
+		if err != nil {
+			return err
+		}
+		if publish, err = publicationRequired(cfg, previous, collected, published.Epoch, now); err != nil {
+			return err
+		}
+	}
+	if !publish {
+		fmt.Printf("publication unchanged; keeping epoch %d\n", published.Epoch)
+		return reportPublish(false)
+	}
+	epoch := now
 	collected.IndexHistory, err = apt.RetainIndexes(cfg, records, previous.IndexHistory, epoch)
 	if err != nil {
 		return err
@@ -502,5 +524,59 @@ func executeUpdatePublication() error {
 	if err = safe.Atomic("publication/snapshot.json", snapshotData); err != nil {
 		return err
 	}
-	return safe.Atomic("publication/context.json", append(data, '\n'))
+	if err = safe.Atomic("publication/context.json", append(data, '\n')); err != nil {
+		return err
+	}
+	return reportPublish(true)
+}
+
+// refreshMargin is the released validity that must remain before skipping a
+// refresh would risk serving an expired index.
+const refreshMargin = 2 * 24 * 60 * 60
+
+// publicationRequired reports whether the published tree must be replaced.
+// Skipping is only allowed when the inputs are unchanged, the published Release
+// keeps expiry headroom, and the live tree is exactly the published epoch. The
+// live check keeps a failed build or deploy from being skipped forever.
+func publicationRequired(cfg config.Config, previous, collected snapshot.Snapshot, published, now int64) (bool, error) {
+	if published <= 0 || cfg.Repository.ValidUntilDays <= 0 {
+		return true, nil
+	}
+	previousDigest, err := previous.Digest()
+	if err != nil {
+		return false, err
+	}
+	collectedDigest, err := collected.Digest()
+	if err != nil {
+		return false, err
+	}
+	if previousDigest != collectedDigest {
+		return true, nil
+	}
+	if published+int64(cfg.Repository.ValidUntilDays)*86400-now <= refreshMargin {
+		return true, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	live, err := verify.LiveEpoch(ctx, cfg.Repository.BaseURL)
+	if err != nil {
+		return true, nil
+	}
+	return live != published, nil
+}
+
+func reportPublish(publish bool) error {
+	name := os.Getenv("GITHUB_OUTPUT")
+	if name == "" {
+		return nil
+	}
+	file, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return errors.New("GITHUB_OUTPUT unavailable")
+	}
+	defer file.Close()
+	if _, err = fmt.Fprintf(file, "publish=%t\n", publish); err != nil {
+		return errors.New("GITHUB_OUTPUT write failed")
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,6 +86,29 @@ func (s *Snapshot) Normalize() {
 			r.Manifest.Normalize()
 		}
 	}
+}
+
+// Digest identifies the publication inputs a snapshot describes. It ignores the
+// collection timestamp and retained-index expiries, which advance on every run
+// even when upstream releases have not changed.
+func (s Snapshot) Digest() ([sha256.Size]byte, error) {
+	b, e := json.Marshal(s)
+	if e != nil {
+		return [sha256.Size]byte{}, e
+	}
+	stable := Snapshot{}
+	if e = json.Unmarshal(b, &stable); e != nil {
+		return [sha256.Size]byte{}, errors.New("invalid snapshot")
+	}
+	stable.Collection.CompletedAt = ""
+	for name, entry := range stable.IndexHistory {
+		stable.IndexHistory[name] = HistoricalIndex{Data: entry.Data}
+	}
+	stable.Normalize()
+	if b, e = json.Marshal(stable); e != nil {
+		return [sha256.Size]byte{}, e
+	}
+	return sha256.Sum256(b), nil
 }
 func (s Snapshot) Save(name string) error {
 	s.Normalize()
