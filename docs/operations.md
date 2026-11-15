@@ -1,4 +1,6 @@
-# 发布与恢复
+# 发布与恢复速查
+
+面向维护者。输入、开发与离线重放见[输入与开发速查](contracts.md)；下游接入见[接入指南](project-onboarding.md)。生产配置、发布、密钥变更和回滚均需相应授权。
 
 ## 初始生产配置
 
@@ -21,7 +23,7 @@
 
 ## 发布
 
-`update-publication.yml` 每六小时、手动或收到 `project-release-published` 时收集快照，并在同一个 job 内构建，再由 `publish.yml` 签名、运行 APT 检查并上传。合并这两步只是为了少付一次 runner 与缓存还原开销；`publish.yml` 仍独立成 job，因为它持有 `pages-production` 环境与签名子密钥。
+[update-publication.yml](../.github/workflows/update-publication.yml) 每六小时、手动或收到 `project-release-published` 时收集快照并构建；[publish.yml](../.github/workflows/publish.yml) 在独立的 `pages-production` 环境中签名、运行 APT 检查并部署。
 
 收集结果与已提交快照一致（忽略 `completed_at` 与 `expires_at`）、已发布 Release 剩余有效期超过两天、且线上 `Release` 的 `Date` 等于已提交 epoch 时，不写新 epoch，构建和部署整步跳过。线上 `Date` 不匹配会强制重建，所以构建或部署失败不会被跳过掩盖；有效期逼近两天时也会强制刷新 epoch。单次跳过只消耗收集时间，不再产生空提交。
 
@@ -34,21 +36,6 @@ unsigned artifact 只包含未签名 `public/`、快照、发布参数和源 com
 ## 密钥轮换
 
 先分发包含新旧子密钥的公钥环，仍用旧子密钥签名。客户端的密钥环需要单独更新。完成分发后更新 CI 子密钥和 context 中的签名指纹，验证 APT 客户端，再移除旧子密钥。
-
-## 用户安装
-
-```sh
-sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://pkgs.moraxyc.com/deb/keys/moraxyc-archive-keyring.gpg \
-  -o /tmp/moraxyc-archive-keyring.gpg
-
-# 与独立发布的 release 记录核对公钥指纹
-gpg --show-keys --with-fingerprint /tmp/moraxyc-archive-keyring.gpg
-sudo install -m 0644 /tmp/moraxyc-archive-keyring.gpg /etc/apt/keyrings/moraxyc-archive-keyring.gpg
-printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/moraxyc-archive-keyring.gpg] https://pkgs.moraxyc.com/deb stable main' \
-  | sudo tee /etc/apt/sources.list.d/moraxyc.list
-sudo apt-get update
-```
 
 ## 恢复
 
