@@ -1,0 +1,5 @@
+[[rules]]
+package = "remora"
+architecture = "*"
+asset = "remora_*.deb"
+pool = "pool/{project}/{release_tag}/{filename}"
