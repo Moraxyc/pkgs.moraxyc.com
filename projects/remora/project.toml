@@ -1,0 +1,5 @@
+[project]
+repository = "moraxyc/Remora"
+enabled = true
+manifest_asset = "remora-apt-manifest.json"
+include_prereleases = false

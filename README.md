@@ -7,6 +7,7 @@
 | Project | Source |
 | --- | --- |
 | fetchrix | [GitHub](https://github.com/moraxyc/fetchrix) |
+| remora | [GitHub](https://github.com/moraxyc/Remora) |
 | whois42d-ng | [GitHub](https://github.com/moraxyc/whois42d-ng) |
 
 ## 添加仓库
