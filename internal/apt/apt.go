@@ -101,9 +101,14 @@ func PublicFiles(c config.Config, rs []snapshot.Record, key []byte, epoch int64,
 	if e != nil {
 		return nil, e
 	}
+	index, e := IndexHTML(c, rs)
+	if e != nil {
+		return nil, e
+	}
 	files["_redirects"] = routes
 	files["_headers"] = []byte(redirects.Headers)
 	files["404.html"] = []byte(redirects.NotFound)
+	files["index.html"] = index
 	files["deb/keys/moraxyc-archive-keyring.gpg"] = key
 	return files, nil
 }

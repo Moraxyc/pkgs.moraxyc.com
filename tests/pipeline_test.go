@@ -218,6 +218,12 @@ func TestSignedRepositoryAndTampering(t *testing.T) {
 			fs.ServeHTTP(w, req)
 		}))
 		defer server.Close()
+		resp, err := http.Get(server.URL + "/")
+		must(t, err)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("root path status = %d, want 200", resp.StatusCode)
+		}
 		must(t, verify.Remote(context.Background(), server.URL, one, c, rs, nil, epoch))
 		routeStatus = http.StatusMovedPermanently
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -226,7 +232,7 @@ func TestSignedRepositoryAndTampering(t *testing.T) {
 			t.Fatal("permanent pool redirect accepted")
 		}
 	})
-	cases := []string{"_redirects", "deb/dists/stable/main/binary-amd64/Packages", "deb/dists/stable/Release", "deb/dists/stable/InRelease", "deb/dists/stable/Release.gpg"}
+	cases := []string{"_redirects", "index.html", "deb/dists/stable/main/binary-amd64/Packages", "deb/dists/stable/Release", "deb/dists/stable/InRelease", "deb/dists/stable/Release.gpg"}
 	for _, name := range cases {
 		t.Run("tamper/"+name, func(t *testing.T) {
 			file := filepath.Join(one, name)
